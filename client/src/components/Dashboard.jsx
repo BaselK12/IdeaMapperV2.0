@@ -52,8 +52,9 @@ const Dashboard = () => {
   // Auth user
   const [currentUser, setCurrentUser] = useState(null);
   const [showAvatarPrompt, setShowAvatarPrompt] = useState(false);
-  const DEFAULT_AVATAR_URL =
-    "https://YOUR-PROJECT.supabase.co/storage/v1/object/public/avatars/defaults/default.png";
+const DEFAULT_AVATAR_URL =
+  supabase.storage.from("avatars").getPublicUrl("defaults/default.png").data.publicUrl;
+
 
   // Action targets
   const [renameTarget, setRenameTarget] = useState(null);        // { id, name }
