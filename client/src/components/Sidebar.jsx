@@ -58,7 +58,7 @@ export default function Sidebar({ active = "maps", user = {}, onNav, onUpgrade, 
             <div className="sb__footer">
                 <button className="sb__profile" onClick={onSettings}>
                     <img
-                        src={user?.profilePicture || "/avatar.png"}
+                        src={user?.profilePicture || "/genericpp.png"}
                         alt=""
                         className="sb__avatar"
                     />

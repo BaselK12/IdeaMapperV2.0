@@ -46,7 +46,7 @@ const ParticipantBox = ({ mapId, currentUserId }) => {
       const list = (profs || []).map((p) => ({
         id: p.id,
         username: p.username || "Unknown User",
-        profile_picture: p.profile_picture || "/default-profile.png",
+        profile_picture: p.profile_picture || "/genericpp.png",
         online: !!onlineByUser[p.id],
       }));
 
