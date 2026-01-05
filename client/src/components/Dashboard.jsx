@@ -15,7 +15,7 @@ import MapCard from "./MapCard";
 // Helper to calculate the payload
 const bytes = (obj) => new TextEncoder().encode(JSON.stringify(obj ?? {})).length;
 
-const Dashboard = () => {
+const Dashboard = ({ theme, onToggleTheme }) => {
   const navigate = useNavigate();
 
   // Maps state
@@ -774,6 +774,8 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
         <Sidebar
           active="maps"
           user={{ username, email, profilePicture }}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
           onNav={(key) => { if (key === "settings") setShowProfileDetails(true); }}
           onSettings={() => setShowProfileDetails(true)}
           onSignOut={handleLogout}

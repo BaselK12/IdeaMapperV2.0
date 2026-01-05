@@ -505,7 +505,7 @@ h3 {
 }
 
 :root[data-theme="dark"] .sb__profile-name {
-  color: black;  /* darker grey in dark theme */
+  color: var(--ink);
 }
 
 /* Choose input file design */

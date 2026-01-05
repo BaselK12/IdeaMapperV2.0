@@ -1,21 +1,17 @@
 // Sidebar.jsx
-import React, { useEffect, useState } from "react";
+import React from "react";
 import "../styles/Sidebar.css";
 
-export default function Sidebar({ active = "maps", user = {}, onNav, onUpgrade, onSettings, onSignOut }) {
-    const [theme, setTheme] = useState("light");
-    // Load saved theme on mount
-    useEffect(() => {
-        const saved = localStorage.getItem("theme");
-        if (saved) setTheme(saved);
-    }, []);
-
-    // Apply theme to document root and remember preference
-    useEffect(() => {
-        document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("theme", theme);
-    }, [theme]);
-
+export default function Sidebar({
+    active = "maps",
+    user = {},
+    onNav,
+    onUpgrade,
+    onSettings,
+    onSignOut,
+    theme = "light",
+    onToggleTheme,
+}) {
     return (
         <aside className="sb" aria-label="Main navigation">
             {/* Logo */}
@@ -36,7 +32,7 @@ export default function Sidebar({ active = "maps", user = {}, onNav, onUpgrade, 
 
                 <button
                     className="sb__item"
-                    onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                    onClick={() => onToggleTheme?.()}
                 >
                     <span className="sb__icon">{theme === "light" ? "🌙" : "☀️"}</span>
                     <span className="sb__label">

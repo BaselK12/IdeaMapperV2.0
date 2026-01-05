@@ -1,5 +1,5 @@
 // App.jsx (Supabase version with ResetPassword route)
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import LoginPage from "./components/LoginPage";
 import Dashboard from "./components/Dashboard";
@@ -13,6 +13,20 @@ const socket = io("http://localhost:5000");
 
 const App = () => {
   const [session, setSession] = useState(null);
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("theme") || "light";
+    } catch {
+      return "light";
+    }
+  });
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("theme", theme);
+    } catch { }
+  }, [theme]);
 
   // Supabase auth listener
   useEffect(() => {
@@ -55,7 +69,15 @@ const App = () => {
     <BrowserRouter>
       <Routes>
         {/* Dashboard Route */}
-        <Route path="/" element={<Dashboard />} />
+        <Route
+          path="/"
+          element={
+            <Dashboard
+              theme={theme}
+              onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
+            />
+          }
+        />
 
         {/* Password Reset Route */}
         <Route path="/reset-password" element={<ResetPassword />} />
