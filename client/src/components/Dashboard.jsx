@@ -1,5 +1,5 @@
 // Dashboard.jsx (Supabase version)
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import MapEditor from "./MapEditor"; // TODO: migrate MapEditor to Supabase next
@@ -42,6 +42,7 @@ const Dashboard = ({ theme, onToggleTheme }) => {
 
   // Profile state
   const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [profilePicture, setProfilePicture] = useState("");
   const [email, setEmail] = useState("");
@@ -53,6 +54,9 @@ const Dashboard = ({ theme, onToggleTheme }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAvatarPrompt, setShowAvatarPrompt] = useState(false);
 const DEFAULT_AVATAR_URL = "/genericpp.png";
+
+  const userMenuRef = useRef(null);
+  const userMenuBtnRef = useRef(null);
 
 
   // Action targets
@@ -321,6 +325,24 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
     if (!term) setMaps(allMaps);
     else setMaps(allMaps.filter((m) => (m.name || "").toLowerCase().includes(term)));
   }, [searchTerm, allMaps]);
+
+  // Close user menu on outside click / Escape
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onDoc = (e) => {
+      if (e.key === "Escape") { setUserMenuOpen(false); return; }
+      const target = e.target;
+      const inMenu = userMenuRef.current && userMenuRef.current.contains(target);
+      const inBtn = userMenuBtnRef.current && userMenuBtnRef.current.contains(target);
+      if (!inMenu && !inBtn) setUserMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onDoc);
+    };
+  }, [userMenuOpen]);
 
   // ------------- profile handlers -------------
   const handleFileChange = (e) => {
@@ -786,16 +808,63 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
             <div className="header-left">
               <div className="user-info">
                 <img src={profilePicture} alt="Profile" className="profile-picture" />
-                <h2 className="user-greeting">Hi {username || "User"} ;)</h2>
-                <button className="details-button" onClick={() => setShowProfileDetails(true)}>
-                  User Details
-                </button>
+                <div className="user-text">
+                  <h2 className="user-greeting">Hi {username || "User"}</h2>
+                  <p className="user-subtitle">Create a map or join one to get started.</p>
+                </div>
               </div>
             </div>
             <div className="header-right">
-              <button className="card-button logout-button" onClick={handleLogout}>
-                Log Out
-              </button>
+              <div className="header-actions">
+                {!isCreateInputVisible && (
+                  <button className="create-map-button" onClick={() => setIsCreateInputVisible(true)}>
+                    Create New Map
+                  </button>
+                )}
+                {!isJoinInputVisible && (
+                  <button className="card-button" onClick={() => setIsJoinInputVisible(true)}>
+                    Join Map
+                  </button>
+                )}
+              </div>
+              <div className="user-menu" ref={userMenuRef}>
+                <button
+                  ref={userMenuBtnRef}
+                  className="user-menu__button"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={userMenuOpen}
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                >
+                  <span className="user-menu__avatar">
+                    <img src={profilePicture} alt="" />
+                  </span>
+                  <span className="user-menu__text">
+                    {username || "User"}
+                  </span>
+                  <span className="user-menu__chev" aria-hidden="true">v</span>
+                </button>
+                {userMenuOpen && (
+                  <div className="user-menu__panel" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="user-menu__item"
+                      onClick={() => { setUserMenuOpen(false); setShowProfileDetails(true); }}
+                    >
+                      User details
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="user-menu__item is-danger"
+                      onClick={() => { setUserMenuOpen(false); handleLogout(); }}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
@@ -808,6 +877,7 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                     &times;
                   </button>
                 </div>
+                <p className="modal-subtitle">Update your public details and profile photo.</p>
                 <form className="profile-form" onSubmit={handleProfileUpdate}>
                   <div className="form-group">
                     <label>Email Address:</label>
@@ -833,23 +903,16 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
             </div>
           )}
 
-          <div className="button-container">
-            {!isCreateInputVisible && (
-              <button className="card-button" onClick={() => setIsCreateInputVisible(true)}>
-                Create New Map
-              </button>
-            )}
-
-            {!isJoinInputVisible && (
-              <button className="card-button" onClick={() => setIsJoinInputVisible(true)}>
-                Join Map
-              </button>
-            )}
-          </div>
-
           {isCreateInputVisible && (
             <div className="modal">
               <div className="modal-content">
+                <div className="modal-header">
+                  <h2>Create a new map</h2>
+                  <button className="close-button" onClick={() => setIsCreateInputVisible(false)}>
+                    &times;
+                  </button>
+                </div>
+                <p className="modal-subtitle">Give your map a clear, descriptive name.</p>
                 <form onSubmit={createNewMap} className="new-map-form">
                   <input
                     type="text"
@@ -859,7 +922,7 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                     className="new-map-input"
                   />
                   <div className="modal-buttons">
-                    <button type="submit" className="card-button">Create Map</button>
+                    <button type="submit" className="create-map-button">Create Map</button>
                     <button type="button" onClick={() => setIsCreateInputVisible(false)} className="card-button">
                       Cancel
                     </button>
@@ -872,6 +935,13 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
           {isJoinInputVisible && (
             <div className="modal">
               <div className="modal-content">
+                <div className="modal-header">
+                  <h2>Join a map</h2>
+                  <button className="close-button" onClick={() => setIsJoinInputVisible(false)}>
+                    &times;
+                  </button>
+                </div>
+                <p className="modal-subtitle">Ask the owner for the map name and ID.</p>
                 <form onSubmit={joinMap} className="new-map-form">
                   <input
                     type="text"
@@ -901,7 +971,7 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                   {error && <p className="error-text">{error}</p>}
 
                   <div className="modal-buttons">
-                    <button type="submit" className="card-button">Join Map</button>
+                    <button type="submit" className="create-map-button">Join Map</button>
                     <button type="button" onClick={() => setIsJoinInputVisible(false)} className="card-button">
                       Cancel
                     </button>
@@ -914,40 +984,78 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
           {confirmDelete.isVisible && (
             <div className="modal">
               <div className="modal-content">
+                <div className="modal-header">
+                  <h2>Delete map</h2>
+                  <button className="close-button" onClick={cancelDelete}>
+                    &times;
+                  </button>
+                </div>
+                <p className="modal-subtitle">This action is permanent.</p>
                 <p>Are you sure you want to delete the "{confirmDelete.mapName}" map?</p>
                 <div className="modal-buttons">
-                  <button className="card-button" onClick={confirmDeleteMap}>Yes</button>
-                  <button className="card-button" onClick={cancelDelete}>No</button>
+                  <button className="delete-button" onClick={confirmDeleteMap}>Delete map</button>
+                  <button className="card-button" onClick={cancelDelete}>Cancel</button>
                 </div>
               </div>
             </div>
           )}
 
-          <h3 className="learning-space-title">Your Learning Space:</h3>
+          <div className="dashboard-frame">
+            <div className="dashboard-frame__head">
+              <div>
+                <h3 className="learning-space-title">Your Learning Space</h3>
+                <p className="learning-space-subtitle">Find maps fast or create something new.</p>
+              </div>
+            </div>
 
-          <div className="search-container">
-            <input
-              type="text"
-              placeholder="Search learning space..."
-              value={searchTerm}
-              onChange={handleSearch}
-              className="search-input"
-            />
-          </div>
-
-          <div className="maps-grid">
-            {maps.map((m) => (
-              <MapCard
-                key={m.id}
-                map={m}
-                ownerName={owners[m.owner_id]}
-                onOpen={(id) => setSelectedMapId(id)}
-                onRename={handleRename}
-                onEditDescription={handleEditDescription}
-                onDuplicate={(map) => handleDuplicate(map)}
-                onDelete={(map) => handleDeleteClick(map.id, map.name)}
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="Search learning space..."
+                value={searchTerm}
+                onChange={handleSearch}
+                className="search-input"
               />
-            ))}
+            </div>
+
+            <div className={`maps-grid ${maps.length === 0 ? "is-empty" : ""}`}>
+              {maps.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state__icon" aria-hidden="true">
+                    <span className="empty-state__dot" />
+                  </div>
+                  <h4 className="empty-state__title">No maps yet</h4>
+                  <p className="empty-state__text">
+                    Create your first map or join one with an ID to start collaborating.
+                  </p>
+                  <div className="empty-state__actions">
+                    {!isCreateInputVisible && (
+                      <button className="create-map-button" onClick={() => setIsCreateInputVisible(true)}>
+                        Create New Map
+                      </button>
+                    )}
+                    {!isJoinInputVisible && (
+                      <button className="card-button" onClick={() => setIsJoinInputVisible(true)}>
+                        Join Map
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                maps.map((m) => (
+                  <MapCard
+                    key={m.id}
+                    map={m}
+                    ownerName={owners[m.owner_id]}
+                    onOpen={(id) => setSelectedMapId(id)}
+                    onRename={handleRename}
+                    onEditDescription={handleEditDescription}
+                    onDuplicate={(map) => handleDuplicate(map)}
+                    onDelete={(map) => handleDeleteClick(map.id, map.name)}
+                  />
+                ))
+              )}
+            </div>
           </div>
 
           <LimitModal

@@ -64,9 +64,6 @@ export default function Sidebar({
                     </div>
                 </button>
 
-                <button className="sb__signout" onClick={onSignOut}>
-                    Sign out
-                </button>
             </div>
         </aside>
     );

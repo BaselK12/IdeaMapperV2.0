@@ -13,6 +13,7 @@ export default function PlanModal({ isOpen, currentPlan, mapLimit, onClose, onUp
 
     return (
       <div
+        className="plan-card"
         style={{
           border: "1px solid var(--border)",
           borderRadius: "16px",
@@ -46,12 +47,14 @@ export default function PlanModal({ isOpen, currentPlan, mapLimit, onClose, onUp
           <button className="close-button" onClick={onClose}>&times;</button>
         </div>
 
-        <div style={{ fontSize: ".95rem", color: "var(--muted)", marginBottom: 12 }}>
+        <p className="modal-subtitle">Pick a plan that matches your workflow.</p>
+
+        <div className="modal-meta">
           Current: <strong style={{ color: "var(--ink)" }}>{currentPlan.toUpperCase()}</strong> • Limit:{" "}
           <strong style={{ color: "var(--ink)" }}>{mapLimit}</strong> maps
         </div>
 
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        <div className="plan-grid">
           <PlanCard
             title="Free"
             slug="free"

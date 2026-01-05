@@ -22,6 +22,9 @@ export default function LimitModal({ open, kind, limit, used, onClose, onUpgrade
           </button>
         </div>
 
+        <p className="modal-subtitle">
+          You have hit your current usage cap. Upgrade to unlock more room.
+        </p>
         <div style={{ lineHeight: 1.5 }}>
           {kind === "map" ? (
             <>
@@ -50,11 +53,11 @@ export default function LimitModal({ open, kind, limit, used, onClose, onUpgrade
         </div>
 
         <div className="modal-buttons" style={{ marginTop: 14 }}>
-          <button className="card-button" onClick={onClose}>
-            Okay
+          <button className="create-map-button" onClick={onUpgrade}>
+            Upgrade Now
           </button>
-          <button className="card-button" onClick={onUpgrade}>
-            💎 Upgrade Now!
+          <button className="card-button" onClick={onClose}>
+            Maybe later
           </button>
         </div>
       </div>
