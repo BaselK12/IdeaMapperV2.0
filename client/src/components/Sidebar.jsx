@@ -2,6 +2,8 @@
 import React from "react";
 import "../styles/Sidebar.css";
 
+const DEFAULT_AVATAR_URL = "/genericpp.png";
+
 export default function Sidebar({
     active = "maps",
     user = {},
@@ -14,6 +16,14 @@ export default function Sidebar({
     isOpen = false,
     onClose,
 }) {
+    const avatarSrc = user?.profilePicture?.trim()
+        ? user.profilePicture
+        : DEFAULT_AVATAR_URL;
+    const handleAvatarError = (e) => {
+        e.currentTarget.onerror = null;
+        e.currentTarget.src = DEFAULT_AVATAR_URL;
+    };
+
     return (
         <aside
             id="mobile-sidebar"
@@ -68,9 +78,10 @@ export default function Sidebar({
             <div className="sb__footer">
                 <button className="sb__profile" onClick={onSettings}>
                     <img
-                        src={user?.profilePicture || "/genericpp.png"}
+                        src={avatarSrc}
                         alt=""
                         className="sb__avatar"
+                        onError={handleAvatarError}
                     />
                     <div className="sb__profile-info">
                         <div className="sb__profile-name">{user?.username || "User"}</div>

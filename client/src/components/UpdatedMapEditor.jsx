@@ -16,6 +16,12 @@ import "reactflow/dist/style.css";
 import { supabase } from "../supabaseClient";
 import "../styles/MapEditor.css";
 
+const DEFAULT_AVATAR_URL = "/genericpp.png";
+const handleAvatarError = (e) => {
+  e.currentTarget.onerror = null;
+  e.currentTarget.src = DEFAULT_AVATAR_URL;
+};
+
 // --- String helpers
 const getNodeTitle = (node) =>
   (node && node.data && typeof node.data.title === "string" ? node.data.title : "") || "";
@@ -499,13 +505,12 @@ const MapEditor = ({ mapId }) => {
 return (
   <div className="me-node">
     <div className="me-node-meta">
-      {creatorInfo?.profile_picture && (
-        <img
-          src={creatorInfo.profile_picture}
-          alt="Creator Avatar"
-          style={{ width: 20, height: 20, borderRadius: "50%" }}
-        />
-      )}
+      <img
+        src={creatorInfo?.profile_picture || DEFAULT_AVATAR_URL}
+        alt="Creator Avatar"
+        style={{ width: 20, height: 20, borderRadius: "50%" }}
+        onError={handleAvatarError}
+      />
       <span>{creatorUsername}</span> ({creationDate})
     </div>
     <div className="me-node-title">{title}</div>
@@ -626,7 +631,7 @@ return (
       const list = (profs || []).map((p) => ({
         id: p.id,
         username: p.username || "Unknown",
-        profile_picture: p.profile_picture || "/genericpp.png",
+        profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
         online: !!onlineMap[p.id],
       }));
       setParticipants(list);
@@ -1012,19 +1017,18 @@ useEffect(() => {
                 }}
               >
                 <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "bold" }}>Node Details</h3>
-                {nodeCreators[selectedNode.creator]?.profile_picture && (
-                  <img
-                    src={nodeCreators[selectedNode.creator]?.profile_picture}
-                    alt="Creator Avatar"
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: "50%",
-                      marginTop: 10,
-                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.2)",
-                    }}
-                  />
-                )}
+                <img
+                  src={nodeCreators[selectedNode.creator]?.profile_picture || DEFAULT_AVATAR_URL}
+                  alt="Creator Avatar"
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: "50%",
+                    marginTop: 10,
+                    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.2)",
+                  }}
+                  onError={handleAvatarError}
+                />
                 <p style={{ padding: 10, margin: "10px 0 0", fontSize: "1rem", fontWeight: "bold" }}>
                   {nodeCreators[selectedNode.creator]?.username || "Unknown Creator"}
                 </p>
@@ -1130,9 +1134,10 @@ useEffect(() => {
                   {p.username} {currentUser?.id === p.id ? " (Me)" : ""}
                 </span>
                 <img
-                  src={p.profile_picture}
+                  src={p.profile_picture || DEFAULT_AVATAR_URL}
                   alt={`${p.username}'s profile`}
                   style={{ width: 50, height: 50, borderRadius: "50%", objectFit: "cover" }}
+                  onError={handleAvatarError}
                 />
                 <span style={{ color: p.online ? "green" : "red", fontSize: 12 }}>
                   {p.online ? "online" : "offline"}

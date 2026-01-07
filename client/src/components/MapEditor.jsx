@@ -16,6 +16,12 @@ import "reactflow/dist/style.css";
 import { supabase } from "../supabaseClient";
 import "../styles/MapEditor.css";
 
+const DEFAULT_AVATAR_URL = "/genericpp.png";
+const handleAvatarError = (e) => {
+  e.currentTarget.onerror = null;
+  e.currentTarget.src = DEFAULT_AVATAR_URL;
+};
+
 // --- String helpers: single source for node name ---
 const getNodeTitle = (node) =>
   (node && node.data && typeof node.data.title === "string" ? node.data.title : "") || "";
@@ -634,13 +640,12 @@ const MapEditor = ({ mapId }) => {
     return (
       <div className="me-node" style={{ position: "relative", width: "100%", height: "100%" }}>
         <div className="me-node-meta">
-          {creatorInfo?.profile_picture && (
-            <img
-              src={creatorInfo.profile_picture}
-              alt="Creator Avatar"
-              style={{ width: 20, height: 20, borderRadius: "50%", marginRight: 5 }}
-            />
-          )}
+          <img
+            src={creatorInfo?.profile_picture || DEFAULT_AVATAR_URL}
+            alt="Creator Avatar"
+            style={{ width: 20, height: 20, borderRadius: "50%", marginRight: 5 }}
+            onError={handleAvatarError}
+          />
           <span>{creatorUsername}</span> ({creationDate})
         </div>
         <span className="me-node-title">{title}</span>
@@ -751,7 +756,7 @@ const MapEditor = ({ mapId }) => {
       const list = (profs || []).map((p) => ({
         id: p.id,
         username: p.username || "Unknown",
-        profile_picture: p.profile_picture || "/genericpp.png",
+        profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
         online: !!onlineMap[p.id],
       }));
       setParticipants(list);
@@ -1297,19 +1302,18 @@ const MapEditor = ({ mapId }) => {
                 }}
               >
                 <h3 style={{ margin: 0, fontSize: "1.5rem", fontWeight: "bold" }}>Node Details</h3>
-                {nodeCreators[selectedNode.creator]?.profile_picture && (
-                  <img
-                    src={nodeCreators[selectedNode.creator]?.profile_picture}
-                    alt="Creator Avatar"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      borderRadius: "50%",
-                      marginTop: "10px",
-                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.2)",
-                    }}
-                  />
-                )}
+                <img
+                  src={nodeCreators[selectedNode.creator]?.profile_picture || DEFAULT_AVATAR_URL}
+                  alt="Creator Avatar"
+                  style={{
+                    width: "60px",
+                    height: "60px",
+                    borderRadius: "50%",
+                    marginTop: "10px",
+                    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.2)",
+                  }}
+                  onError={handleAvatarError}
+                />
                 <p style={{ padding: "10px", margin: "10px 0 0", fontSize: "1rem", fontWeight: "bold" }}>
                   {nodeCreators[selectedNode.creator]?.username || "Unknown Creator"}
                 </p>
@@ -1527,9 +1531,10 @@ const MapEditor = ({ mapId }) => {
                   {p.username} {currentUser?.id === p.id ? " (Me)" : ""}
                 </span>
                 <img
-                  src={p.profile_picture}
+                  src={p.profile_picture || DEFAULT_AVATAR_URL}
                   alt={`${p.username}'s profile`}
                   style={{ width: 50, height: 50, borderRadius: "50%", objectFit: "cover" }}
+                  onError={handleAvatarError}
                 />
                 <span style={{ color: presenceUsers[p.id] ? "green" : "red", fontSize: 12 }}>
                   {presenceUsers[p.id] ? "online" : "offline"}

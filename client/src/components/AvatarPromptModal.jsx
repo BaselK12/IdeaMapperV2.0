@@ -1,5 +1,23 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp"]);
+
+const isAllowedImageFile = (file) => {
+  if (!file) return false;
+  if (ALLOWED_IMAGE_TYPES.has(file.type)) return true;
+  const ext = (file.name || "").split(".").pop()?.toLowerCase();
+  return ALLOWED_IMAGE_EXTS.has(ext);
+};
+
+const getAvatarValidationError = (file) => {
+  if (!file) return "Please choose an image.";
+  if (!isAllowedImageFile(file)) return "Please upload a JPG, PNG, or WebP image.";
+  if (file.size > MAX_AVATAR_BYTES) return "Image must be 5MB or smaller.";
+  return "";
+};
 
 /**
  * Props:
@@ -23,8 +41,41 @@ export default function AvatarPromptModal({
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    setErr("");
+    if (previewUrl) setPreviewUrl("");
+    if (fileRef.current) fileRef.current.value = "";
+  }, [isOpen, previewUrl]);
 
   if (!isOpen) return null;
+
+  const handleAvatarError = (e) => {
+    e.currentTarget.onerror = null;
+    e.currentTarget.src = defaultAvatarUrl;
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validationError = getAvatarValidationError(file);
+    if (validationError) {
+      setErr(validationError);
+      e.target.value = "";
+      return;
+    }
+    setErr("");
+    const nextUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextUrl);
+  };
 
   const handleSkip = async () => {
     try {
@@ -56,7 +107,8 @@ export default function AvatarPromptModal({
       if (!userId) throw new Error("Missing user id.");
 
       const file = fileRef.current?.files?.[0];
-      if (!file) throw new Error("Please choose an image.");
+      const validationError = getAvatarValidationError(file);
+      if (validationError) throw new Error(validationError);
 
       const ext = (file.name.split(".").pop() || "png").toLowerCase();
       const path = `${userId}/${crypto.randomUUID()}.${ext}`;
@@ -109,13 +161,27 @@ export default function AvatarPromptModal({
         </p>
 
         <div className="form-group">
-          <label>Profile Picture</label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="form-input"
-          />
+          <label htmlFor="avatar-upload-input">Upload/Change photo</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <img
+              src={previewUrl || defaultAvatarUrl}
+              alt="Profile preview"
+              className="profile-picture"
+              onError={handleAvatarError}
+            />
+            <input
+              ref={fileRef}
+              id="avatar-upload-input"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              className="form-input"
+              onChange={handleFileChange}
+              disabled={busy}
+            />
+          </div>
+          <p style={{ margin: "6px 0 0", color: "var(--muted)", fontSize: ".85rem" }}>
+            JPG, PNG, or WebP up to 5MB.
+          </p>
         </div>
 
         {err && <p className="error-text">{err}</p>}
@@ -136,7 +202,7 @@ export default function AvatarPromptModal({
             className="card-button"
             style={{ background: "#0ea5e9", color: "white", border: "none" }}
           >
-            {busy ? "Working..." : "Upload"}
+            {busy ? "Uploading..." : "Upload"}
           </button>
         </div>
       </div>

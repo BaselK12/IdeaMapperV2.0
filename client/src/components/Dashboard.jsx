@@ -15,6 +15,18 @@ import MapCard from "./MapCard";
 // Helper to calculate the payload
 const bytes = (obj) => new TextEncoder().encode(JSON.stringify(obj ?? {})).length;
 
+const DEFAULT_AVATAR_URL = "/genericpp.png";
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp"]);
+
+const isAllowedImageFile = (file) => {
+  if (!file) return false;
+  if (ALLOWED_IMAGE_TYPES.has(file.type)) return true;
+  const ext = (file.name || "").split(".").pop()?.toLowerCase();
+  return ALLOWED_IMAGE_EXTS.has(ext);
+};
+
 const Dashboard = ({ theme, onToggleTheme }) => {
   const navigate = useNavigate();
 
@@ -48,14 +60,17 @@ const Dashboard = ({ theme, onToggleTheme }) => {
   const [profilePicture, setProfilePicture] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [profileNotice, setProfileNotice] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileAction, setProfileAction] = useState("");
   const [joinSuccessMessage, setJoinSuccessMessage] = useState("");
   const [owners, setOwners] = useState({});
 
   // Auth user
   const [currentUser, setCurrentUser] = useState(null);
   const [showAvatarPrompt, setShowAvatarPrompt] = useState(false);
-const DEFAULT_AVATAR_URL = "/genericpp.png";
 
+  const fileInputRef = useRef(null);
   const userMenuRef = useRef(null);
   const userMenuBtnRef = useRef(null);
   const userMenuPanelRef = useRef(null);
@@ -164,7 +179,7 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
       setEmail(u?.email || "");
       setUsername(u?.user_metadata?.username || u?.email?.split("@")[0] || "");
       setProfilePicture(
-        u?.user_metadata?.profile_picture || "https://example.com/default-profile-picture.png"
+        u?.user_metadata?.profile_picture || DEFAULT_AVATAR_URL
       );
     }
   }, []);
@@ -410,15 +425,40 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
   }, [isSidebarOpen]);
 
   // ------------- profile handlers -------------
+  const resolvedProfilePicture = profilePicture?.trim()
+    ? profilePicture
+    : DEFAULT_AVATAR_URL;
+  const hasCustomProfilePicture =
+    Boolean(profilePicture?.trim()) && profilePicture !== DEFAULT_AVATAR_URL;
+
+  const handleAvatarError = (e) => {
+    e.currentTarget.onerror = null;
+    e.currentTarget.src = DEFAULT_AVATAR_URL;
+  };
+
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => setProfilePicture(reader.result); // base64 for now
-      reader.readAsDataURL(file);
-    } else {
-      setError("Please upload a valid image file.");
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+    setProfileNotice("");
+
+    if (!isAllowedImageFile(file)) {
+      setError("Please upload a JPG, PNG, or WebP image.");
+      e.target.value = "";
+      return;
     }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setError("Image must be 5MB or smaller.");
+      e.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") setProfilePicture(reader.result); // base64 for now
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleUsernameChange = async (e) => {
@@ -446,14 +486,20 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setError("");
+    setProfileNotice("");
     try {
-      if (!currentUser) return;
+      if (!currentUser) {
+        setError("You must be logged in.");
+        return;
+      }
       // Re-check uniqueness on submit
       const clean = (username || "").trim();
       if (!clean) {
         setError("Username cannot be empty.");
         return;
       }
+      setProfileBusy(true);
+      setProfileAction("save");
       const taken = await isUsernameTaken(clean, currentUser.id);
       if (taken) {
         setError("Username is already taken. Please choose another one.");
@@ -466,9 +512,39 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
         .eq("id", currentUser.id);
       if (upErr) throw upErr;
 
-      setShowProfileDetails(false);
+      setProfileNotice("Profile updated.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       setError(err.message);
+    } finally {
+      setProfileBusy(false);
+      setProfileAction("");
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setError("");
+    setProfileNotice("");
+    if (!currentUser) {
+      setError("You must be logged in.");
+      return;
+    }
+    setProfileBusy(true);
+    setProfileAction("remove");
+    try {
+      const { error: upErr } = await supabase
+        .from("profiles")
+        .update({ profile_picture: null })
+        .eq("id", currentUser.id);
+      if (upErr) throw upErr;
+      setProfilePicture("");
+      setProfileNotice("Profile photo removed.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (err) {
+      setError(err.message || "Failed to remove profile photo.");
+    } finally {
+      setProfileBusy(false);
+      setProfileAction("");
     }
   };
 
@@ -907,7 +983,12 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                 <span className="sr-only">Open menu</span>
               </button>
               <div className="user-info">
-                <img src={profilePicture} alt="Profile" className="profile-picture" />
+                <img
+                  src={resolvedProfilePicture}
+                  alt="Profile"
+                  className="profile-picture"
+                  onError={handleAvatarError}
+                />
                 <div className="user-text">
                   <h2 className="user-greeting">Hi {username || "User"}</h2>
                   <p className="user-subtitle">Create a map or join one to get started.</p>
@@ -937,7 +1018,11 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                   onClick={() => setUserMenuOpen((v) => !v)}
                 >
                   <span className="user-menu__avatar">
-                    <img src={profilePicture} alt="" />
+                    <img
+                      src={resolvedProfilePicture}
+                      alt=""
+                      onError={handleAvatarError}
+                    />
                   </span>
                   <span className="user-menu__text">
                     {username || "User"}
@@ -993,13 +1078,54 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                     <input type="text" value={username} onChange={handleUsernameChange} className="form-input" />
                   </div>
                   <div className="form-group">
-                    <label>Profile Picture:</label>
-                    <input type="file" accept="image/*" onChange={handleFileChange} className="form-input" />
+                    <label htmlFor="profile-picture-input">Upload/Change photo:</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <img
+                        src={resolvedProfilePicture}
+                        alt="Profile preview"
+                        className="profile-picture"
+                        onError={handleAvatarError}
+                      />
+                      <input
+                        ref={fileInputRef}
+                        id="profile-picture-input"
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                        onChange={handleFileChange}
+                        className="form-input"
+                        disabled={profileBusy}
+                      />
+                    </div>
+                    <p style={{ margin: "6px 0 0", color: "var(--muted)", fontSize: ".85rem" }}>
+                      JPG, PNG, or WebP up to 5MB.
+                    </p>
                   </div>
                   {error && <p className="error-text">{error}</p>}
+                  {profileNotice && <p className="success-text">{profileNotice}</p>}
                   <div className="modal-buttons" style={{ marginTop: 12 }}>
-                    <button type="submit" className="card-button">Save</button>
-                    <button type="button" className="card-button" onClick={() => setShowProfileDetails(false)}>
+                    {hasCustomProfilePicture && (
+                      <button
+                        type="button"
+                        className="card-button"
+                        onClick={handleRemovePhoto}
+                        disabled={profileBusy}
+                      >
+                        {profileBusy && profileAction === "remove" ? "Removing..." : "Remove photo"}
+                      </button>
+                    )}
+                    <button type="submit" className="card-button" disabled={profileBusy}>
+                      {profileBusy && profileAction === "save" ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      className="card-button"
+                      onClick={() => {
+                        setShowProfileDetails(false);
+                        setError("");
+                        setProfileNotice("");
+                      }}
+                      disabled={profileBusy}
+                    >
                       Close
                     </button>
                   </div>

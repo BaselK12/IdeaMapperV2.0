@@ -3,6 +3,11 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 const ONLINE_WINDOW_MS = 20_000; // 20 seconds
+const DEFAULT_AVATAR_URL = "/genericpp.png";
+const handleAvatarError = (e) => {
+  e.currentTarget.onerror = null;
+  e.currentTarget.src = DEFAULT_AVATAR_URL;
+};
 
 const ParticipantBox = ({ mapId, currentUserId }) => {
   const [participants, setParticipants] = useState([]);
@@ -46,7 +51,7 @@ const ParticipantBox = ({ mapId, currentUserId }) => {
       const list = (profs || []).map((p) => ({
         id: p.id,
         username: p.username || "Unknown User",
-        profile_picture: p.profile_picture || "/genericpp.png",
+        profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
         online: !!onlineByUser[p.id],
       }));
 
@@ -125,9 +130,10 @@ const ParticipantBox = ({ mapId, currentUserId }) => {
                 {p.online ? "online" : "offline"}
               </span>
               <img
-                src={p.profile_picture}
+                src={p.profile_picture || DEFAULT_AVATAR_URL}
                 alt={`${p.username}'s profile`}
                 style={{ width: 42, height: 42, borderRadius: "50%", objectFit: "cover" }}
+                onError={handleAvatarError}
               />
             </div>
           </li>
