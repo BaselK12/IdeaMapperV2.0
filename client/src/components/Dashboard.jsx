@@ -1,5 +1,5 @@
 // Dashboard.jsx (Supabase version)
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import MapEditor from "./MapEditor"; // TODO: migrate MapEditor to Supabase next
@@ -27,6 +27,7 @@ const Dashboard = ({ theme, onToggleTheme }) => {
   const [mapLimit, setMapLimit] = useState(5);
   const [copyLimit, setCopyLimit] = useState(3);
   const [showPlans, setShowPlans] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
 
   // UI state (create/join/delete)
@@ -57,6 +58,8 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
 
   const userMenuRef = useRef(null);
   const userMenuBtnRef = useRef(null);
+  const userMenuPanelRef = useRef(null);
+  const [userMenuStyle, setUserMenuStyle] = useState(null);
 
 
   // Action targets
@@ -343,6 +346,68 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
       document.removeEventListener("keydown", onDoc);
     };
   }, [userMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!userMenuOpen) {
+      setUserMenuStyle(null);
+      return;
+    }
+    const isMobile = window.matchMedia("(max-width: 640px)").matches;
+    if (!isMobile) {
+      setUserMenuStyle(null);
+      return;
+    }
+    const updateMenuPosition = () => {
+      const btn = userMenuBtnRef.current;
+      const panel = userMenuPanelRef.current;
+      if (!btn || !panel) return;
+      const rect = btn.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const padding = 12;
+      const panelWidth = panelRect.width || 200;
+      const panelHeight = panelRect.height || 120;
+      const maxLeft = Math.max(padding, window.innerWidth - panelWidth - padding);
+      const left = Math.min(Math.max(rect.right - panelWidth, padding), maxLeft);
+      const maxTop = Math.max(padding, window.innerHeight - panelHeight - padding);
+      const top = Math.min(Math.max(rect.bottom + 8, padding), maxTop);
+      setUserMenuStyle({
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        right: "auto",
+      });
+    };
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [userMenuOpen]);
+
+  // Mobile sidebar overlay behavior
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+      return;
+    }
+    setUserMenuOpen(false);
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setIsSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isSidebarOpen]);
 
   // ------------- profile handlers -------------
   const handleFileChange = (e) => {
@@ -783,6 +848,8 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
   };
+  const openSidebar = () => setIsSidebarOpen(true);
+  const closeSidebar = () => setIsSidebarOpen(false);
 
   // ------------- render -------------
   if (selectedMapId) {
@@ -791,21 +858,54 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
   }
 
   return (
-    <div className="dashboard-container">
+    <div className={`dashboard-container ${isSidebarOpen ? "is-nav-open" : ""}`}>
       <div className="dashboard-layout"> {/* New flex container */}
         <Sidebar
           active="maps"
           user={{ username, email, profilePicture }}
           theme={theme}
           onToggleTheme={onToggleTheme}
-          onNav={(key) => { if (key === "settings") setShowProfileDetails(true); }}
-          onSettings={() => setShowProfileDetails(true)}
-          onSignOut={handleLogout}
-          onUpgrade={() => setShowPlans(true)}
+          onNav={(key) => {
+            if (key === "settings") setShowProfileDetails(true);
+            closeSidebar();
+          }}
+          onSettings={() => {
+            setShowProfileDetails(true);
+            closeSidebar();
+          }}
+          onSignOut={() => {
+            closeSidebar();
+            handleLogout();
+          }}
+          onUpgrade={() => {
+            setShowPlans(true);
+            closeSidebar();
+          }}
+          isOpen={isSidebarOpen}
+          onClose={closeSidebar}
         />
+        {isSidebarOpen && (
+          <button
+            type="button"
+            className="sb-backdrop"
+            aria-label="Close menu"
+            onClick={closeSidebar}
+          />
+        )}
         <div className="content-area">
           <header className="dashboard-header">
             <div className="header-left">
+              <button
+                type="button"
+                className="sidebar-toggle"
+                onClick={openSidebar}
+                aria-label="Open navigation menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="mobile-sidebar"
+              >
+                <span className="sidebar-toggle__icon" aria-hidden="true" />
+                <span className="sr-only">Open menu</span>
+              </button>
               <div className="user-info">
                 <img src={profilePicture} alt="Profile" className="profile-picture" />
                 <div className="user-text">
@@ -845,7 +945,12 @@ const DEFAULT_AVATAR_URL = "/genericpp.png";
                   <span className="user-menu__chev" aria-hidden="true">v</span>
                 </button>
                 {userMenuOpen && (
-                  <div className="user-menu__panel" role="menu">
+                  <div
+                    className="user-menu__panel"
+                    role="menu"
+                    ref={userMenuPanelRef}
+                    style={userMenuStyle || undefined}
+                  >
                     <button
                       type="button"
                       role="menuitem"

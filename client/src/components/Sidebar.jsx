@@ -11,13 +11,27 @@ export default function Sidebar({
     onSignOut,
     theme = "light",
     onToggleTheme,
+    isOpen = false,
+    onClose,
 }) {
     return (
-        <aside className="sb" aria-label="Main navigation">
+        <aside
+            id="mobile-sidebar"
+            className={`sb ${isOpen ? "sb--open" : ""}`}
+            aria-label="Main navigation"
+        >
             {/* Logo */}
             <button className="sb__logo" onClick={() => onNav?.("maps")}>
                 <span className="sb__logo-dot" />
                 <span className="sb__logo-text">IdeaMapper</span>
+            </button>
+            <button
+                type="button"
+                className="sb__close"
+                aria-label="Close menu"
+                onClick={onClose}
+            >
+                &times;
             </button>
 
             {/* Nav */}

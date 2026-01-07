@@ -37,6 +37,21 @@
   font-size: 1rem;
 }
 
+.sb__close {
+  display: none;
+  background: var(--surface, var(--card));
+  border: 1px solid var(--border);
+  color: var(--text, var(--ink));
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+.sb__close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring, var(--ring));
+}
+
 /* Nav */
 .sb__nav {
   display: grid;
@@ -209,7 +224,34 @@
 
 /* Super small screens (optional) */
 @media (max-width: 640px) {
-  /* If you later use sb--fixed on phones, you might want a drawer instead. */
+  .sb {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    padding: 20px 18px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 70;
+  }
+  .sb.sb--open {
+    transform: translateX(0);
+  }
+  .sb__logo { padding-right: 54px; }
+  .sb__label, .sb__profile-info, .sb__signout { display: block; }
+  .sb__profile { grid-template-columns: 40px 1fr; justify-items: start; }
+  .sb__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
 }
 /* Sidebar base styles */
 .sb {
@@ -237,5 +279,36 @@
 /* Collapse for small screens */
 @media (max-width: 1024px) {
   .sb { width: 76px; }
+}
+
+@media (max-width: 640px) {
+  .sb {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    padding: 20px 18px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 70;
+  }
+  .sb.sb--open {
+    transform: translateX(0);
+  }
+  .sb__logo { padding-right: 54px; }
+  .sb__label, .sb__profile-info, .sb__signout { display: block; }
+  .sb__profile { grid-template-columns: 40px 1fr; justify-items: start; }
+  .sb__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
 }
 
