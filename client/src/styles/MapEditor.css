@@ -379,3 +379,986 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 .map-editor {
   overflow: hidden; /* the side panel already scrolls */
 }
+
+/* ===== Map view glassmorphism (scoped) ===== */
+.map-view--light {
+  --map-bg: #F5F7FB;
+  --map-bg2: #E8EDF5;
+  --map-glass: rgba(255,255,255,0.65);
+  --map-glass-strong: rgba(255,255,255,0.82);
+  --map-border: rgba(15,23,42,0.10);
+  --map-border-strong: rgba(15,23,42,0.16);
+  --map-text: #0F172A;
+  --map-muted: #475569;
+  --map-accent: #0EA5E9;
+  --map-shadow: 0 20px 60px rgba(15,23,42,0.18);
+  --map-shadow-soft: 0 10px 25px rgba(15,23,42,0.12);
+
+  --ink: var(--map-text);
+  --muted: var(--map-muted);
+  --border: var(--map-border);
+  --card: var(--map-glass-strong);
+  --shadow-1: var(--map-shadow-soft);
+  --shadow-2: var(--map-shadow);
+  --ring: 0 0 0 3px rgba(14,165,233,0.25);
+
+  color: var(--map-text);
+}
+
+.map-view.map-editor {
+  background:
+    radial-gradient(1100px 520px at 50% -15%, rgba(14,165,233,0.10), transparent 60%),
+    linear-gradient(160deg, var(--map-bg), var(--map-bg2));
+}
+
+.map-view .me-canvas {
+  background-color: var(--map-page-bg, var(--map-bg));
+  background-image:
+    radial-gradient(900px 420px at 20% -10%, rgba(14,165,233,0.12), transparent 60%),
+    radial-gradient(700px 320px at 90% 10%, rgba(15,23,42,0.04), transparent 65%),
+    linear-gradient(160deg, var(--map-bg), var(--map-bg2));
+  background-blend-mode: screen, normal, normal;
+}
+
+.map-view .react-flow__background {
+  opacity: 0.18;
+}
+
+.map-view .me-stats {
+  background: var(--map-glass);
+  border: 1px solid var(--map-border);
+  box-shadow: var(--map-shadow-soft);
+  color: var(--map-text);
+  backdrop-filter: blur(14px);
+}
+
+.map-view .me-stats ul {
+  color: var(--map-muted);
+}
+
+.map-view .me-sidepanel {
+  background: linear-gradient(
+    145deg,
+    rgba(255,255,255,0.62),
+    rgba(255,255,255,0.32)
+  );
+  border: 1px solid rgba(255,255,255,0.68);
+  border-radius: 22px 0 0 22px;
+  box-shadow: var(--map-shadow), inset 0 1px 0 rgba(255,255,255,0.6);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  background-clip: padding-box;
+  color: var(--map-text);
+  padding: 10px;
+  z-index: 7;
+}
+
+.map-view .me-sidepanel h3 {
+  color: var(--map-text);
+}
+
+.map-view .me-label {
+  color: var(--map-muted);
+}
+
+.map-view .me-field small {
+  color: var(--map-muted);
+}
+
+.map-view .me-input,
+.map-view .me-textarea,
+.map-view .me-color {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(15,23,42,0.10);
+  color: var(--map-text);
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.08);
+}
+
+.map-view .me-input::placeholder,
+.map-view .me-textarea::placeholder {
+  color: var(--map-muted);
+}
+
+.map-view .me-input:focus,
+.map-view .me-textarea:focus,
+.map-view .me-color:focus {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px rgba(35,198,247,0.35);
+}
+
+.map-view .me-chip {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--map-border);
+  color: var(--map-text);
+}
+
+.map-view .me-canvas-settings,
+.map-view .me-participants {
+  background: linear-gradient(
+    160deg,
+    rgba(255,255,255,0.88),
+    rgba(255,255,255,0.68)
+  );
+  border: 1px solid rgba(255,255,255,0.7);
+  border-radius: 14px;
+  box-shadow: var(--map-shadow-soft);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+.map-view .me-participants {
+  margin-top: 20px;
+  padding: 10px;
+}
+
+.map-view .drawer {
+  background: var(--map-glass-strong);
+  border-left: 1px solid var(--map-border-strong);
+  box-shadow: var(--map-shadow);
+  color: var(--map-text);
+  backdrop-filter: blur(18px);
+}
+
+.map-view .me-node {
+  background: var(--map-glass-strong);
+  border: 1px solid var(--map-border);
+  box-shadow: var(--map-shadow-soft);
+  color: var(--map-text);
+  backdrop-filter: blur(14px);
+}
+
+.map-view .me-node-meta {
+  background: var(--map-glass);
+  border: 1px solid var(--map-border);
+  color: var(--map-muted);
+  backdrop-filter: blur(12px);
+}
+
+.map-view .me-node-title {
+  color: var(--map-text);
+}
+
+.map-view .me-node-input {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--map-border);
+  color: var(--map-text);
+}
+
+.map-view .react-flow__node.selected .me-node {
+  outline: 2px solid var(--map-accent);
+  box-shadow: 0 0 0 3px rgba(35,198,247,0.25), var(--map-shadow-soft);
+}
+
+.map-view .react-flow__edge-path {
+  stroke: rgba(100,116,139,0.5);
+  stroke-width: 2;
+}
+
+.map-view .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--map-accent) !important;
+  stroke-opacity: 1 !important;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px rgba(35,198,247,0.35));
+}
+
+.map-view .react-flow__connection-path {
+  stroke: var(--map-accent) !important;
+}
+
+.map-view .me-minimap {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 220px;
+  height: 140px;
+  background: var(--map-glass);
+  border: 1px solid var(--map-border);
+  border-radius: 14px;
+  box-shadow: var(--map-shadow-soft);
+  backdrop-filter: blur(16px);
+  z-index: 5;
+}
+
+.map-view .cursor-label {
+  background: var(--map-accent);
+}
+
+.map-view .context-menu {
+  background: var(--map-glass-strong) !important;
+  border: 1px solid var(--map-border) !important;
+  color: var(--map-text) !important;
+  box-shadow: var(--map-shadow-soft) !important;
+  backdrop-filter: blur(12px);
+}
+
+.map-view .context-menu button {
+  color: var(--map-text) !important;
+}
+
+.map-view .context-menu button:hover {
+  background: rgba(35,198,247,0.12) !important;
+  color: var(--map-accent) !important;
+}
+
+.map-view .react-flow__handle {
+  background: rgba(14,165,233,0.9) !important;
+  border: 2px solid rgba(255,255,255,0.95) !important;
+  box-shadow: 0 0 8px rgba(14,165,233,0.25);
+}
+
+.map-view .react-flow__handle-target {
+  background: rgba(148,163,184,0.9) !important;
+}
+
+/* ===== Map view glassmorphism (mapView only) ===== */
+.mapView {
+  --glass-base: rgba(255, 255, 255, 0.24);
+  --glass-tint: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.32);
+  --glass-border-soft: rgba(255, 255, 255, 0.22);
+  --glass-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  --glass-shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.10);
+  --glass-radius: 20px;
+  --glass-blur: 20px;
+  --map-accent: #23c6f7;
+  --map-text: #0f172a;
+  --map-muted: rgba(15, 23, 42, 0.65);
+  --map-helper: rgba(15, 23, 42, 0.45);
+  width: 100%;
+  min-height: 100vh;
+  color: var(--map-text);
+  background:
+    radial-gradient(900px 500px at 30% 20%, rgba(56, 189, 248, 0.16), transparent 60%),
+    linear-gradient(145deg, var(--map-page-bg, #f7fbff), #eef5ff);
+}
+
+.mapView .glassPanel {
+  background: var(--glass-base);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--glass-radius);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.mapView .glassPanelStrong {
+  background: rgba(255, 255, 255, 0.34) !important;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: calc(var(--glass-radius) - 2px);
+  backdrop-filter: blur(calc(var(--glass-blur) - 2px));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) - 2px));
+}
+
+.mapView .map-editor {
+  background: transparent;
+}
+
+.mapView .me-canvas {
+  background: transparent;
+}
+
+.mapView .react-flow,
+.mapView .react-flow__renderer,
+.mapView .react-flow__pane {
+  background: transparent !important;
+}
+
+.mapView .react-flow__background {
+  opacity: 0.25;
+}
+
+.mapView .me-stats {
+  color: #0f172a;
+}
+
+.mapView .me-stats ul,
+.mapView .me-stats small {
+  color: #475569;
+}
+
+.mapView .mapSidebarGlass {
+  position: relative;
+  background: rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 16px 40px rgba(15,23,42,0.14);
+  border-radius: 22px;
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  overflow: hidden;
+}
+
+.mapView .mapSidebarGlass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.06));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mapView .mapSidebarGlass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mapView .me-input,
+.mapView .me-textarea,
+.mapView .me-color {
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 12px;
+  color: var(--map-text);
+}
+
+.mapView .me-input::placeholder,
+.mapView .me-textarea::placeholder {
+  color: var(--map-helper);
+}
+
+.mapView .me-chip {
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--glass-border-soft);
+  color: var(--map-text);
+}
+
+.mapView .sidebarCard,
+.mapView .sidebarInner {
+  background: var(--glass-base);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 14px;
+}
+
+.mapView .me-node {
+  background: var(--glass-base);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow-soft);
+  color: var(--map-text);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  width: 180px;
+  height: 70px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: width 180ms ease, height 180ms ease, padding 180ms ease,
+    box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+  transform: translateZ(0);
+}
+
+.mapView .me-node.is-selected {
+  width: 240px;
+  height: 120px;
+  padding: 16px 18px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.mapView .me-node-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  text-align: inherit;
+  gap: 6px;
+}
+
+.mapView .me-node-title {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.mapView .me-node-meta {
+  position: static;
+  transform: none;
+  left: auto;
+  top: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  display: block;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--map-muted);
+  pointer-events: none;
+}
+
+.mapView .me-node:hover {
+  box-shadow: 0 18px 36px rgba(15,23,42,0.18);
+  border-color: rgba(255,255,255,0.7);
+  transform: translateY(-1px);
+}
+
+.mapView .react-flow__node {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.mapView .react-flow__node.selected .me-node {
+  outline: 2px solid var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft), var(--glass-shadow-soft);
+}
+
+.mapView .me-minimap {
+  border-radius: var(--glass-radius);
+  padding: 8px;
+  width: 220px;
+  height: 140px;
+  z-index: 5;
+}
+
+.mapView .drawer {
+  background: var(--glass-base);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(140%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(140%);
+}
+
+/* ===== Map view overlay rebuild (MapEditor only) ===== */
+.mapView {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.mapView .mapStage {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background-color: var(--map-page-bg, #f7fbff);
+  background-image:
+    radial-gradient(900px 500px at 30% 20%, rgba(56,189,248,0.12), transparent 60%),
+    linear-gradient(145deg, rgba(255,255,255,0.6), rgba(255,255,255,0.25));
+  overflow: hidden;
+}
+
+.mapView .mapCanvas,
+.mapView .mapCanvas .react-flow {
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+}
+
+.mapView .mapCanvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.mapView .mapOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.mapView .glass {
+  position: relative;
+  background: var(--glass-base);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.mapView .glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-tint);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mapView .glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mapView .me-node.glass {
+  --glass-radius: 18px;
+  --glass-shadow: var(--glass-shadow-soft);
+  --glass-blur: 20px;
+}
+
+.mapView .mapSidebar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: 380px;
+  z-index: 50;
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  color: var(--map-text);
+  transition: width 180ms ease, padding 180ms ease;
+}
+
+.mapView .mapSidebar.is-collapsed {
+  width: 64px;
+  padding: 10px 8px;
+  overflow: hidden;
+}
+
+.mapView .sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mapView .sidebarTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--map-text);
+}
+
+.mapView .sidebarCollapseButton {
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.3);
+  color: var(--map-text);
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.mapView .sidebarCollapseButton:hover,
+.mapView .sidebarCollapseButton:focus-visible,
+.mapView .sidebarRailButton:hover,
+.mapView .sidebarRailButton:focus-visible {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 2px var(--map-accent-soft);
+  outline: none;
+}
+
+.mapView .sidebarRail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding-top: 6px;
+}
+
+.mapView .sidebarRailDivider {
+  width: 100%;
+  height: 1px;
+  background: var(--glass-border-soft);
+  opacity: 0.7;
+}
+
+.mapView .sidebarRailButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.3);
+  color: var(--map-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mapView .sidebarRailButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mapView .sidebarStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapView .sidebarPanel {
+  width: 100%;
+  --glass-radius: 18px;
+  --glass-shadow: var(--glass-shadow);
+  --glass-border: var(--glass-border);
+  padding: 16px;
+  margin-top: 12px;
+  box-sizing: border-box;
+  position: static;
+}
+
+.mapView .sidebarPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mapView .sidebarPanelHeader h3 {
+  margin: 0;
+  color: var(--map-text);
+}
+
+.mapView .sidebarPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapView .sidebarSection {
+  --glass-radius: 16px;
+  --glass-shadow: var(--glass-shadow-soft);
+  --glass-border: var(--glass-border-soft);
+  padding: 12px;
+}
+
+.mapView .sidebarSectionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--map-text);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.mapView .sidebarChevron {
+  display: inline-block;
+  transition: transform 160ms ease;
+}
+
+.mapView .sidebarChevron.is-open {
+  transform: rotate(90deg);
+}
+
+.mapView .sidebarSectionBody {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapView .sidebarSectionBody .me-field,
+.mapView .sidebarPanelBody .me-field {
+  margin-bottom: 0;
+}
+
+.mapView .sidebarActions {
+  display: flex;
+  justify-content: center;
+}
+
+.mapView .me-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mapView .me-help {
+  color: var(--map-helper);
+}
+
+.mapView .radioGroup {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mapView .radioOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--map-text);
+}
+
+.mapView input[type="radio"],
+.mapView input[type="checkbox"] {
+  accent-color: var(--map-accent);
+}
+
+.mapView .me-input:focus,
+.mapView .me-textarea:focus,
+.mapView .me-color:focus {
+  outline: none;
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .me-range {
+  width: 100%;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+  outline: none;
+}
+
+.mapView .me-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--map-accent);
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+.mapView .me-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.mapView .me-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--map-accent);
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+.mapView .me-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.mapView .btn-primary {
+  background: var(--map-accent);
+  color: #0b1320;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.mapView .btn-primary:hover {
+  filter: brightness(1.04);
+}
+
+.mapView .btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--map-accent-soft), 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.mapView .context-menu {
+  background: var(--glass-base) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-shadow-soft) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+.mapView .context-menu button:hover {
+  background: rgba(255,255,255,0.25) !important;
+  color: var(--map-text) !important;
+}
+
+.mapView .edgeTypeButtons {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.mapView .nodeDetailsHeader {
+  --glass-radius: 14px;
+  --glass-shadow: var(--glass-shadow-soft);
+  --glass-border: var(--glass-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.mapView .nodeDetailsTitle {
+  font-weight: 700;
+  color: var(--map-text);
+}
+
+.mapView .nodeDetailsMeta {
+  margin-top: 4px;
+  color: var(--map-muted);
+  font-size: 0.85rem;
+}
+
+.mapView .nodeDetailsAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.7);
+}
+
+.mapView .participantList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapView .participantRow {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+
+.mapView .participantRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mapView .participantIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mapView .participantAvatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.7);
+}
+
+.mapView .participantName {
+  color: var(--map-text);
+  font-weight: 600;
+}
+
+.mapView .participantStatus {
+  font-size: 0.8rem;
+  color: var(--map-helper);
+}
+
+.mapView .participantStatus.online {
+  color: #16a34a;
+}
+
+.mapView .participantStatus.offline {
+  color: #ef4444;
+}
+
+.mapView .shortcutsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--map-text);
+}
+
+.mapView .shortcutsList li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mapView .shortcutKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.28);
+  border: 1px solid var(--glass-border-soft);
+  font-size: 0.78rem;
+  color: var(--map-text);
+  margin-right: 6px;
+}
+
+.mapView .shortcutsFooter {
+  margin-top: 10px;
+  color: var(--map-muted);
+  font-weight: 600;
+}
+
+.mapView .mapHelpButton {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: var(--map-text);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mapView .mapSidebar h3,
+.mapView .mapSidebar h4 {
+  color: var(--map-text);
+}
+
+.mapView .mapSidebar .me-label,
+.mapView .mapSidebar small {
+  color: var(--map-muted);
+}
+
+.mapView .mapMiniMap {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: 240px;
+  height: 160px;
+  padding: 8px;
+  box-sizing: border-box;
+  --glass-radius: 18px;
+  --glass-shadow: var(--glass-shadow-soft);
+  overflow: hidden;
+}
+
+.mapView .mapMiniMapInner {
+  position: static !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.mapView .mapMiniMapInner .react-flow__minimap {
+  background: transparent !important;
+  opacity: 0.95;
+}
+
+.mapView .me-node .me-node-meta {
+  position: static;
+}
