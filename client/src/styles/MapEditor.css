@@ -159,22 +159,63 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 .me-node {
   position: relative;
   display: inline-flex;       /* shrink-wrap to content */
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
-  padding: 12px 18px;
+  gap: 4px;
+  padding: 16px 22px;
   border-radius: 16px;
   background: rgba(255,255,255,.9);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-1);
   box-sizing: border-box;    
-  width: fit-content;         
+  width: fit-content;
+  min-width: 200px;
+  max-width: 320px;         
 }
 
 /* Bold title */
 .me-node-title {
   font-weight: 800;
-  font-size: 1.05rem;
-  white-space: nowrap;     
+  font-size: 1.08rem;
+  line-height: 1.25;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.me-node-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.me-node-snippet {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.2;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 280px;
+}
+
+.me-node-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.me-node-icon {
+  line-height: 1;
 }
 
 /* Creator badge floats above without changing node size */
@@ -737,46 +778,57 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   color: var(--map-text);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  width: 180px;
-  height: 70px;
-  padding: 12px 14px;
+  width: auto;
+  min-width: 220px;
+  max-width: 340px;
+  min-height: 88px;
+  height: auto;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
   gap: 6px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   transition: width 180ms ease, height 180ms ease, padding 180ms ease,
     box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
   transform: translateZ(0);
 }
 
 .mapView .me-node.is-selected {
-  width: 240px;
-  height: 120px;
-  padding: 16px 18px;
-  align-items: flex-start;
-  justify-content: flex-start;
-  text-align: left;
+  min-width: 280px;
+  max-width: 380px;
+  min-height: 140px;
+  padding: 18px 20px;
 }
 
 .mapView .me-node-content {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: inherit;
-  text-align: inherit;
+  align-items: flex-start;
+  text-align: left;
   gap: 6px;
 }
 
 .mapView .me-node-title {
   width: 100%;
-  white-space: nowrap;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.2;
+}
+
+.mapView .me-node-snippet {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .mapView .me-node-meta {
@@ -905,7 +957,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   top: 16px;
   right: 16px;
   bottom: 16px;
-  width: 380px;
+  width: clamp(260px, 24vw, 340px);
   z-index: 50;
   padding: 12px;
   overflow-y: auto;
@@ -915,9 +967,41 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 }
 
 .mapView .mapSidebar.is-collapsed {
-  width: 64px;
+  width: clamp(52px, 8vw, 64px);
   padding: 10px 8px;
+  bottom: auto;
+  height: auto;
+  max-height: calc(100vh - 32px);
   overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .mapView .mapSidebar {
+    width: clamp(240px, 40vw, 320px);
+    bottom: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .mapView .mapSidebar {
+    right: 12px;
+    top: 12px;
+    width: min(92vw, 340px);
+    bottom: 12px;
+  }
+
+  .mapView .mapSidebar.is-collapsed {
+    width: 56px;
+  }
+}
+
+@media (max-width: 540px) {
+  .mapView .mapSidebar {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+  }
 }
 
 .mapView .sidebarHeader {
@@ -1007,11 +1091,35 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border-soft);
 }
 
 .mapView .sidebarPanelHeader h3 {
   margin: 0;
   color: var(--map-text);
+}
+
+.mapView .panelCloseButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.35);
+  color: var(--map-text);
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.mapView .panelCloseButton:hover {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .panelCloseButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
 }
 
 .mapView .sidebarPanelBody {
@@ -1020,11 +1128,181 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   gap: 12px;
 }
 
+.mapView .nodeTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.2);
+}
+
+.mapView .nodeTab {
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.35);
+  color: var(--map-text);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.mapView .nodeTab:hover {
+  transform: translateY(-1px);
+}
+
+.mapView .nodeTab.is-active {
+  background: rgba(255,255,255,0.7);
+  border-color: var(--map-accent);
+  box-shadow: 0 8px 18px rgba(15,23,42,0.12);
+}
+
+.mapView .nodeTabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapView .nodeBlockActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mapView .nodeBlockButton {
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.4);
+  color: var(--map-text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.mapView .nodeBlockButton:hover {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .nodeBlocksEmpty {
+  font-size: 0.85rem;
+  color: var(--map-muted);
+  padding: 2px 4px;
+}
+
+.mapView .nodeBlockList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapView .nodeBlockCard {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.28);
+  box-shadow: inset 0 1px 4px rgba(15,23,42,0.08);
+}
+
+.mapView .nodeBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.mapView .nodeBlockTitle {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--map-text);
+}
+
+.mapView .nodeBlockRemove {
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.35);
+  color: var(--map-text);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mapView .nodeBlockRemove:hover {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 2px var(--map-accent-soft);
+}
+
+.mapView .nodeBlockImagePreview {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft);
+  margin-top: 8px;
+}
+
+.mapView .nodeBlockLink {
+  display: inline-flex;
+  margin-top: 4px;
+  color: var(--map-accent);
+  text-decoration: underline;
+  word-break: break-word;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.mapView .nodeBlockCard .me-field {
+  margin-bottom: 8px;
+}
+
 .mapView .sidebarSection {
   --glass-radius: 16px;
   --glass-shadow: var(--glass-shadow-soft);
-  --glass-border: var(--glass-border-soft);
-  padding: 12px;
+  --glass-border: rgba(15,23,42,0.12);
+  position: relative;
+  padding: 10px;
+  border: 1px solid rgba(15,23,42,0.12);
+  background: var(--glass-base);
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.mapView .sidebarSection.is-open {
+  border-color: var(--map-accent);
+  box-shadow: 0 12px 26px rgba(15,23,42,0.16);
+}
+
+.mapView .sidebarSection.is-static {
+  border-color: rgba(15,23,42,0.12);
+  box-shadow: var(--glass-shadow-soft);
+}
+
+.mapView .sidebarSection.is-static.is-open {
+  border-color: rgba(15,23,42,0.12);
+  box-shadow: var(--glass-shadow-soft);
+}
+
+.mapView .sidebarSection.is-open::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--map-accent), rgba(255,255,255,0));
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mapView .sidebarSection.is-static::after {
+  display: none;
 }
 
 .mapView .sidebarSectionHeader {
@@ -1038,13 +1316,51 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   color: var(--map-text);
   font-weight: 700;
   cursor: pointer;
-  padding: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
   text-align: left;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.mapView .sidebarSectionHeader:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .sidebarSectionHeader:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.mapView .sidebarSectionHeader.is-static {
+  padding: 4px 8px 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--map-muted);
+}
+
+.mapView .sidebarSectionHeader.is-static:hover {
+  background: transparent;
+}
+
+.mapView .sidebarSection.is-open .sidebarSectionHeader {
+  background: rgba(255,255,255,0.28);
+  box-shadow: inset 0 0 0 1px var(--glass-border-soft);
+}
+
+.mapView .sidebarSection.is-static.is-open .sidebarSectionHeader {
+  background: transparent;
+  box-shadow: none;
 }
 
 .mapView .sidebarChevron {
   display: inline-block;
-  transition: transform 160ms ease;
+  transition: transform 180ms ease;
+}
+
+.mapView .sidebarSection.is-static .sidebarChevron {
+  display: none;
 }
 
 .mapView .sidebarChevron.is-open {
@@ -1056,6 +1372,25 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.3);
+  border: 1px solid rgba(255,255,255,0.45);
+  box-shadow: inset 0 1px 4px rgba(15,23,42,0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: sidebarInsetReveal 200ms ease;
+}
+
+@keyframes sidebarInsetReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mapView .sidebarSectionBody .me-field,
@@ -1076,6 +1411,227 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 
 .mapView .me-help {
   color: var(--map-helper);
+}
+
+.mapView .toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+  font-weight: 600;
+  color: var(--map-text);
+}
+
+.mapView .toggleText {
+  color: var(--map-text);
+}
+
+.mapView .toggleSwitch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.mapView .toggleSwitch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.mapView .toggleSlider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.3);
+  border: 1px solid var(--glass-border-soft);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mapView .toggleSlider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 2px 6px rgba(15,23,42,0.18);
+  transition: transform 180ms ease;
+}
+
+.mapView .toggleSwitch input:checked + .toggleSlider {
+  background: var(--map-accent-soft);
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+}
+
+.mapView .toggleSwitch input:checked + .toggleSlider::after {
+  transform: translateX(20px);
+}
+
+.mapView .toggleSwitch input:focus-visible + .toggleSlider {
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .segmentedControl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.2);
+}
+
+.mapView .segment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--map-muted);
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.mapView .segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mapView .segment:focus-within {
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .segment.is-active {
+  background: rgba(255,255,255,0.6);
+  color: var(--map-text);
+  box-shadow: inset 0 0 0 1px var(--map-accent), 0 8px 18px rgba(15,23,42,0.12);
+}
+
+.mapView .segmentContent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mapView .segmentIcon {
+  width: 20px;
+  height: 14px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.35);
+}
+
+.mapView .segmentIcon-dots {
+  background-image: radial-gradient(rgba(15,23,42,0.35) 1px, transparent 1px);
+  background-size: 6px 6px;
+}
+
+.mapView .segmentIcon-lines {
+  background-image: linear-gradient(90deg, rgba(15,23,42,0.28) 0 1px, transparent 1px 6px);
+  background-size: 6px 100%;
+}
+
+.mapView .segmentIcon-none {
+  background-image: linear-gradient(90deg, rgba(15,23,42,0.2) 0 100%);
+  opacity: 0.4;
+}
+
+.mapView .colorControl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.mapView .colorControlPicker {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border-soft);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mapView .colorControlPicker::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 10px;
+}
+
+.mapView .colorControlPicker::-webkit-color-swatch {
+  border: none;
+  border-radius: 10px;
+}
+
+.mapView .colorControlPicker::-moz-color-swatch {
+  border: none;
+  border-radius: 10px;
+}
+
+.mapView .colorHexInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.5);
+  color: var(--map-text);
+  font-family: "SF Mono", "Fira Code", "Consolas", "Liberation Mono", "Menlo", monospace;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.mapView .colorHexInput:focus {
+  outline: none;
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .colorCopyButton,
+.mapView .copyButton {
+  border: 1px solid var(--glass-border-soft);
+  background: rgba(255,255,255,0.4);
+  color: var(--map-text);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.mapView .colorCopyButton:hover,
+.mapView .copyButton:hover {
+  border-color: var(--map-accent);
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .colorCopyButton:focus-visible,
+.mapView .copyButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--map-accent-soft);
+}
+
+.mapView .inlineRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mapView .me-meta {
+  font-size: 0.86rem;
+  color: var(--map-muted);
+  padding: 4px 2px;
 }
 
 .mapView .radioGroup {
@@ -1227,19 +1783,20 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 }
 
 .mapView .participantRow {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--glass-border-soft);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.28);
+  border: 1px solid var(--glass-border-soft);
 }
 
 .mapView .participantRow:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+  border-bottom: 1px solid var(--glass-border-soft);
 }
 
 .mapView .participantIdentity {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .mapView .participantAvatar {
@@ -1256,16 +1813,27 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 }
 
 .mapView .participantStatus {
-  font-size: 0.8rem;
-  color: var(--map-helper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .mapView .participantStatus.online {
   color: #16a34a;
+  background: rgba(34,197,94,0.16);
+  border: 1px solid rgba(34,197,94,0.35);
 }
 
 .mapView .participantStatus.offline {
   color: #ef4444;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.35);
 }
 
 .mapView .shortcutsList {
@@ -1274,7 +1842,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   color: var(--map-text);
 }
 
@@ -1282,27 +1850,32 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 10px;
 }
 
 .mapView .shortcutKey {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 72px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.28);
-  border: 1px solid var(--glass-border-soft);
+  min-width: 88px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(15,23,42,0.12);
   font-size: 0.78rem;
+  font-weight: 700;
   color: var(--map-text);
-  margin-right: 6px;
+  box-shadow: inset 0 -2px 0 rgba(15,23,42,0.12), 0 6px 12px rgba(15,23,42,0.08);
+  font-family: "SF Mono", "Fira Code", "Consolas", "Liberation Mono", "Menlo", monospace;
 }
 
 .mapView .shortcutsFooter {
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--map-muted);
   font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .mapView .mapHelpButton {
@@ -1361,4 +1934,548 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 
 .mapView .me-node .me-node-meta {
   position: static;
+}
+
+/* === P1 enhancements === */
+.nodeBlockControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nodeBlockReorder {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  background: rgba(255,255,255,0.45);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.nodeBlockReorder:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.nodeBlockReorder:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.nodeBlockUploadRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 2px 0 8px;
+}
+
+.nodeBlockUploadInput {
+  flex: 1 1 180px;
+}
+
+.nodeBlockUploadButton {
+  border: 1px solid var(--glass-border-soft, var(--border));
+  background: rgba(255,255,255,0.5);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.nodeBlockUploadButton:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.nodeBlockUploadButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.nodeBlockUploadButton.is-ghost {
+  background: rgba(255,255,255,0.3);
+  color: var(--muted);
+}
+
+.nodeBlockUploadHint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: -4px;
+}
+
+.nodeBlockUploadError {
+  font-size: 0.8rem;
+  color: #ef4444;
+  margin-top: -4px;
+}
+
+.uploadSpinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(14,165,233,0.2);
+  border-top-color: var(--map-accent, #0ea5e9);
+  animation: upload-spin 0.8s linear infinite;
+}
+
+@keyframes upload-spin {
+  to { transform: rotate(360deg); }
+}
+
+.nodeBlockVideoPreview {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  margin-top: 8px;
+  background: rgba(15,23,42,0.08);
+}
+
+.nodeBlockVideoEmbed {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  margin-top: 8px;
+  overflow: hidden;
+  background: rgba(15,23,42,0.06);
+}
+
+.nodeBlockVideoEmbed iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.nodeBlockVideoFallback {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px dashed var(--glass-border-soft, var(--border));
+}
+
+.nodePresetSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nodePresetLabel {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.nodePresetList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nodePresetButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  background: rgba(255,255,255,0.45);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.nodePresetButton:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.nodePresetButton.is-active {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.nodePresetButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.nodePresetSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(15,23,42,0.15);
+}
+
+.nodePresetHint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.nodeQuickActions {
+  position: absolute;
+  top: -6px;
+  left: 100%;
+  transform: translate(-100%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  background: rgba(255,255,255,0.9);
+  box-shadow: var(--shadow-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 5;
+}
+
+.me-node:hover .nodeQuickActions,
+.me-node.is-selected .nodeQuickActions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-100%, -110%);
+}
+
+.nodeQuickAction {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border-soft, var(--border));
+  background: rgba(255,255,255,0.75);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.nodeQuickAction:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.nodeQuickAction.is-danger {
+  color: #ef4444;
+}
+
+/* === P2: tags, filters, palette === */
+.me-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nodeTypeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.7);
+}
+
+.me-node.is-dimmed {
+  filter: saturate(0.85);
+}
+
+.me-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.tagInputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tagInputRow .me-input {
+  flex: 1 1 auto;
+}
+
+.tagAddButton {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.6);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.tagAddButton:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.tagAddButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.6);
+}
+
+.tagChipLabel {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tagChipRemove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tagChipButton {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.55);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.tagChipButton:hover,
+.tagChipButton.is-active {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filterClearButton {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.55);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterClearButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filterActiveTag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.filterDivider {
+  height: 1px;
+  background: var(--border);
+  opacity: 0.6;
+  margin: 10px 0;
+}
+
+.focusRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.focusExitButton {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.65);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.backlinksList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backlinkItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.55);
+  cursor: pointer;
+  text-align: left;
+}
+
+.backlinkTitle {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.backlinkDirection {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.backlinkDirection.is-incoming {
+  color: #0284c7;
+  background: rgba(14,165,233,0.16);
+  border-color: rgba(14,165,233,0.32);
+}
+
+.backlinkDirection.is-outgoing {
+  color: #16a34a;
+  background: rgba(34,197,94,0.16);
+  border-color: rgba(34,197,94,0.32);
+}
+
+.backlinkDirection.is-both {
+  color: #7c3aed;
+  background: rgba(124,58,237,0.16);
+  border-color: rgba(124,58,237,0.32);
+}
+
+.commandPaletteOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 80px 16px 16px;
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+}
+
+.commandPalette {
+  width: min(560px, 92vw);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.9);
+  box-shadow: var(--shadow-2);
+  padding: 14px;
+}
+
+.commandPaletteInput {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.commandPaletteInput:focus {
+  outline: none;
+  box-shadow: var(--ring);
+  border-color: var(--map-accent, #0ea5e9);
+}
+
+.commandPaletteResults {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.commandPaletteResult {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.7);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.commandPaletteResult:hover {
+  border-color: var(--map-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px var(--map-accent-soft, rgba(14,165,233,0.2));
+}
+
+.commandPaletteResultTitle {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.commandPaletteResultSnippet {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.commandPaletteEmpty {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 6px 4px;
 }

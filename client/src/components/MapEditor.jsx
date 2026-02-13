@@ -138,6 +138,296 @@ const deriveAccentColor = (hex) => {
   return rgbToHex(r, g, b);
 };
 
+const normalizeHex = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate)) return null;
+  return candidate.toUpperCase();
+};
+
+const copyToClipboard = async (text) => {
+  if (!text) return;
+  if (navigator?.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {}
+  }
+  try {
+    const temp = document.createElement("textarea");
+    temp.value = text;
+    temp.setAttribute("readonly", "");
+    temp.style.position = "absolute";
+    temp.style.left = "-9999px";
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand("copy");
+    document.body.removeChild(temp);
+  } catch {}
+};
+
+const BLOCK_SNIPPET_LIMIT = 90;
+
+const makeBlockId = (prefix = "block") => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+};
+
+const normalizeBlockText = (value) => (typeof value === "string" ? value.trim() : "");
+
+const collapseWhitespace = (value) => value.replace(/\s+/g, " ").trim();
+
+const normalizeTagValue = (value) => collapseWhitespace(String(value ?? "")).trim();
+
+const splitTagInput = (value) =>
+  String(value || "")
+    .split(",")
+    .map((part) => normalizeTagValue(part))
+    .filter(Boolean);
+
+const dedupeTags = (tags) => {
+  const seen = new Set();
+  return (tags || []).filter((tag) => {
+    const key = String(tag || "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const getNodeTags = (node) => (Array.isArray(node?.data?.tags) ? node.data.tags : []);
+
+const getNodeType = (node) => {
+  const value = node?.data?.nodeType;
+  return NODE_TYPE_OPTIONS.includes(value) ? value : NODE_TYPE_DEFAULT;
+};
+
+const MEDIA_BUCKET = process.env.REACT_APP_MEDIA_BUCKET || "node-media";
+const HAS_SUPABASE_STORAGE = Boolean(
+  process.env.REACT_APP_SUPABASE_URL && process.env.REACT_APP_SUPABASE_ANON_KEY
+);
+const LOCAL_MEDIA_UPLOAD_MAX_BYTES = 3 * 1024 * 1024; // 3MB cap for dev-only localStorage fallback
+const IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov"]);
+
+const getFileExtension = (value) => {
+  if (!value || typeof value !== "string") return "";
+  const clean = value.split("?")[0].split("#")[0];
+  const parts = clean.split(".");
+  if (parts.length < 2) return "";
+  return parts.pop().toLowerCase();
+};
+
+const isAllowedMediaFile = (file, kind) => {
+  if (!file) return false;
+  const ext = getFileExtension(file.name);
+  if (kind === "image") {
+    return IMAGE_MIME_TYPES.has(file.type) || IMAGE_EXTS.has(ext);
+  }
+  if (kind === "video") {
+    return VIDEO_MIME_TYPES.has(file.type) || VIDEO_EXTS.has(ext);
+  }
+  return false;
+};
+
+const getMediaValidationError = (file, kind) => {
+  if (!file) return "Choose a file to upload.";
+  if (!isAllowedMediaFile(file, kind)) {
+    return kind === "image"
+      ? "Images must be PNG, JPG, JPEG, WEBP, or GIF."
+      : "Videos must be MP4, WebM, or MOV.";
+  }
+  return "";
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsDataURL(file);
+  });
+
+const isDirectVideoUrl = (url) => {
+  const clean = normalizeBlockText(url);
+  if (!clean) return false;
+  if (clean.startsWith("blob:") || clean.startsWith("data:video")) return true;
+  const ext = getFileExtension(clean);
+  return ext === "mp4" || ext === "webm" || ext === "mov";
+};
+
+const getVideoEmbedUrl = (url) => {
+  const clean = normalizeBlockText(url);
+  if (!clean) return "";
+  const ytMatch = clean.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
+  );
+  if (ytMatch?.[1]) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  const vimeoMatch = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeoMatch?.[1]) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  return "";
+};
+
+const buildLegacyBlocks = (note, link, createdAt) => {
+  const blocks = [];
+  const noteText = normalizeBlockText(note);
+  const linkText = normalizeBlockText(link);
+  const stamp = createdAt || new Date().toISOString();
+
+  if (noteText) {
+    blocks.push({ id: makeBlockId("text"), type: "text", text: noteText, createdAt: stamp });
+  }
+  if (linkText) {
+    blocks.push({ id: makeBlockId("link"), type: "link", url: linkText, label: "", createdAt: stamp });
+  }
+  return blocks;
+};
+
+const migrateNodeData = (nodesList, notes, data) => {
+  const nextData = { ...(data || {}) };
+  let changed = false;
+
+  (nodesList || []).forEach((node) => {
+    if (!node?.id) return;
+    const entry = nextData[node.id] || {};
+    const existingBlocks = Array.isArray(entry.blocks) ? entry.blocks : [];
+
+    if (!Array.isArray(entry.blocks) && entry.blocks !== undefined) {
+      nextData[node.id] = { ...entry, blocks: [] };
+      changed = true;
+      return;
+    }
+
+    if (existingBlocks.length > 0) return;
+
+    const note = notes?.[node.id];
+    const link = entry.link;
+    const legacyBlocks = buildLegacyBlocks(note, link, node.creationTimestamp);
+    if (legacyBlocks.length) {
+      nextData[node.id] = { ...entry, blocks: legacyBlocks };
+      changed = true;
+    }
+  });
+
+  return { nodeData: nextData, changed };
+};
+
+const getSnippetFromBlocks = (blocks) => {
+  if (!Array.isArray(blocks)) return "";
+  for (const block of blocks) {
+    if (block?.type !== "text") continue;
+    const text = normalizeBlockText(block.text);
+    if (!text) continue;
+    const clean = collapseWhitespace(text);
+    if (clean.length <= BLOCK_SNIPPET_LIMIT) return clean;
+    return `${clean.slice(0, BLOCK_SNIPPET_LIMIT).trimEnd()}...`;
+  }
+  return "";
+};
+
+const getBlockTypePresence = (blocks) => {
+  if (!Array.isArray(blocks)) {
+    return { hasText: false, hasImage: false, hasVideo: false, hasLink: false };
+  }
+  let hasText = false;
+  let hasImage = false;
+  let hasVideo = false;
+  let hasLink = false;
+
+  blocks.forEach((block) => {
+    if (!block) return;
+    if (block.type === "text" && normalizeBlockText(block.text)) hasText = true;
+    if (block.type === "image" && normalizeBlockText(block.url)) hasImage = true;
+    if (block.type === "video" && normalizeBlockText(block.url)) hasVideo = true;
+    if (block.type === "link" && normalizeBlockText(block.url)) hasLink = true;
+  });
+
+  return { hasText, hasImage, hasVideo, hasLink };
+};
+
+const pickPrimaryTextFromBlocks = (blocks) => {
+  if (!Array.isArray(blocks)) return "";
+  for (const block of blocks) {
+    if (block?.type !== "text") continue;
+    const text = normalizeBlockText(block.text);
+    if (text) return text;
+  }
+  return "";
+};
+
+const pickPrimaryLinkFromBlocks = (blocks) => {
+  if (!Array.isArray(blocks)) return "";
+  for (const block of blocks) {
+    if (block?.type !== "link") continue;
+    const url = normalizeBlockText(block.url);
+    if (url) return url;
+  }
+  return "";
+};
+
+const ColorControl = ({ id, label, value, onChange, onCopy, pickerTitle }) => {
+  const [hexValue, setHexValue] = useState(value);
+
+  useEffect(() => {
+    setHexValue(value);
+  }, [value]);
+
+  const handleHexChange = (event) => {
+    const next = event.target.value;
+    setHexValue(next);
+    const normalized = normalizeHex(next);
+    if (normalized) {
+      onChange(normalized);
+    }
+  };
+
+  const handleHexBlur = () => {
+    const normalized = normalizeHex(hexValue);
+    if (normalized) {
+      setHexValue(normalized);
+    } else {
+      setHexValue(value);
+    }
+  };
+
+  return (
+    <div className="me-field">
+      <label className="me-label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="colorControl">
+        <input
+          id={id}
+          type="color"
+          className="me-color colorControlPicker"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          title={pickerTitle}
+          aria-label={`${label} picker`}
+        />
+        <input
+          type="text"
+          className="colorHexInput"
+          value={hexValue}
+          onChange={handleHexChange}
+          onBlur={handleHexBlur}
+          spellCheck={false}
+          aria-label={`${label} hex value`}
+        />
+        <button type="button" className="colorCopyButton" onClick={() => onCopy(value)}>
+          Copy
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // --- Small helper UI for context menu ---
 const ContextMenu = ({ onAddNode, onRename, onClose, position }) => {
   if (!position) return null;
@@ -192,15 +482,38 @@ const ContextMenu = ({ onAddNode, onRename, onClose, position }) => {
   );
 };
 
-const SidebarSection = ({ id, title, activeId, onToggle, children, sectionRef }) => {
-  const isOpen = activeId === id;
+const SidebarSection = ({ id, title, activeId, onToggle, children, sectionRef, alwaysOpen = false }) => {
+  const isOpen = alwaysOpen ? true : activeId === id;
+  const bodyId = `sidebar-section-body-${id}`;
+  const headerContent = (
+    <>
+      <span>{title}</span>
+      {!alwaysOpen && <span className={`sidebarChevron ${isOpen ? "is-open" : ""}`}>&gt;</span>}
+    </>
+  );
   return (
-    <section className={`sidebarSection glass ${isOpen ? "is-open" : ""}`} ref={sectionRef}>
-      <button type="button" className="sidebarSectionHeader" onClick={() => onToggle(id)}>
-        <span>{title}</span>
-        <span className={`sidebarChevron ${isOpen ? "is-open" : ""}`}>&gt;</span>
-      </button>
-      {isOpen && <div className="sidebarSectionBody">{children}</div>}
+    <section
+      className={`sidebarSection glass ${isOpen ? "is-open" : ""} ${alwaysOpen ? "is-static" : ""}`}
+      ref={sectionRef}
+    >
+      {alwaysOpen ? (
+        <div className="sidebarSectionHeader is-static">{headerContent}</div>
+      ) : (
+        <button
+          type="button"
+          className="sidebarSectionHeader"
+          onClick={() => onToggle(id)}
+          aria-expanded={isOpen}
+          aria-controls={bodyId}
+        >
+          {headerContent}
+        </button>
+      )}
+      {isOpen && (
+        <div id={bodyId} className="sidebarSectionBody">
+          {children}
+        </div>
+      )}
     </section>
   );
 };
@@ -223,6 +536,8 @@ const predefinedColors = [
 
 const LOCAL_BG_STYLE_KEY = "mapEditor:bgStyle";
 const LOCAL_BG_COLOR_KEY = "mapEditor:bgColor";
+const LOCAL_NODE_PRESET_KEY = "mapEditor:lastPreset";
+const LOCAL_NODE_BORDER_KEY = "mapEditor:lastBorderColor";
 
 const LOCAL_CURSOR_SHOW_KEY = "mapEditor:showMyCursor";
 const LOCAL_CURSOR_FPS_KEY = "mapEditor:cursorFps";
@@ -230,6 +545,23 @@ const LOCAL_CURSOR_FPS_KEY = "mapEditor:cursorFps";
 const LOCAL_CURSOR_SHOW_OTHERS_KEY = "mapEditor:showOthersCursors";
 
 const DEFAULT_EDGE_STYLE = { stroke: "#64748B", strokeOpacity: 0.45, strokeWidth: 2 };
+
+const NODE_STYLE_PRESETS = [
+  { id: "idea", label: "Idea", borderColor: "#0EA5E9" },
+  { id: "question", label: "Question", borderColor: "#F59E0B" },
+  { id: "important", label: "Important", borderColor: "#EF4444" },
+  { id: "source", label: "Source", borderColor: "#10B981" },
+];
+
+const NODE_TYPE_DEFAULT = "Idea";
+const NODE_TYPE_OPTIONS = ["Idea", "Question", "Important", "Source", "Task"];
+const NODE_TYPE_STYLES = {
+  Idea: { borderColor: "#0EA5E9" },
+  Question: { borderColor: "#F59E0B" },
+  Important: { borderColor: "#EF4444" },
+  Source: { borderColor: "#10B981" },
+  Task: { borderColor: "#8B5CF6" },
+};
 
 const colorFromId = (userId) => {
   if (!userId) return "#0ea5e9";
@@ -254,15 +586,31 @@ const MapEditor = ({ mapId }) => {
   // Node/edge UI helpers
   const [selectedElements, setSelectedElements] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [borderColor, setBorderColor] = useState("#64748B");
+  const [borderColor, setBorderColor] = useState(() => {
+    try { return localStorage.getItem(LOCAL_NODE_BORDER_KEY) || "#64748B"; }
+    catch { return "#64748B"; }
+  });
+  const [activePresetId, setActivePresetId] = useState(() => {
+    try { return localStorage.getItem(LOCAL_NODE_PRESET_KEY) || ""; }
+    catch { return ""; }
+  });
+  const [blockUploadState, setBlockUploadState] = useState({});
+  const [pendingUploadFiles, setPendingUploadFiles] = useState({});
   const [nodeNotes, setNodeNotes] = useState({});
-  const [nodeData, setNodeData] = useState({}); // { [nodeId]: { link } }
-  const noteInputRef = useRef(null);
+  const [nodeData, setNodeData] = useState({}); // { [nodeId]: { link, blocks } }
   const shortcutsSectionRef = useRef(null);
   const [selectedEdge, setSelectedEdge] = useState(null);
   const [activeSidebarPanel, setActiveSidebarPanel] = useState("settings");
   const [activeSettingsSection, setActiveSettingsSection] = useState("appearance");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [activeNodeTab, setActiveNodeTab] = useState("content");
+  const [tagInput, setTagInput] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [activeTagFilter, setActiveTagFilter] = useState("");
+  const [focusMode, setFocusMode] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const commandInputRef = useRef(null);
 
   // Context menu + focus guards
   const [contextMenu, setContextMenu] = useState(null);
@@ -287,6 +635,7 @@ const MapEditor = ({ mapId }) => {
   // Refs to avoid noisy updates
   const prevMapRef = useRef(null);
   const lastCursorSentRef = useRef(0);
+  const pendingNodeMigrationRef = useRef(null);
 
   // Current user
   const [currentUser, setCurrentUser] = useState(null);
@@ -379,8 +728,9 @@ const MapEditor = ({ mapId }) => {
     return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
   };
 
+
   const updateMapRow = useCallback(
-    async (newNodes, newEdges) => {
+    async (newNodes, newEdges, nextNodeNotes = nodeNotes, nextNodeData = nodeData) => {
       if (!mapLoaded) return;
       try {
         const filteredNodes = (newNodes || []).map((n) => removeUndefined(n));
@@ -394,8 +744,8 @@ const MapEditor = ({ mapId }) => {
           name: mapName || "Untitled",
           description: mapDescription || "",
           last_edited: new Date().toISOString(),
-          node_notes: removeUndefined(nodeNotes),
-          node_data: removeUndefined(nodeData),
+          node_notes: removeUndefined(nextNodeNotes),
+          node_data: removeUndefined(nextNodeData),
         });
 
         const { error } = await supabase.from("maps").update(payload).eq("id", mapId);
@@ -406,6 +756,29 @@ const MapEditor = ({ mapId }) => {
     },
     [mapLoaded, mapId, mapName, mapDescription, nodeNotes, nodeData]
   );
+
+  const applyNodeDataMigration = (nextNodes, nextEdges, nextNotes, nextData) => {
+    const safeNotes = nextNotes || {};
+    const safeData = nextData || {};
+    const { nodeData: migratedNodeData, changed } = migrateNodeData(nextNodes, safeNotes, safeData);
+    setNodeNotes(safeNotes);
+    setNodeData(migratedNodeData);
+    if (changed) {
+      pendingNodeMigrationRef.current = {
+        nodes: nextNodes,
+        edges: nextEdges,
+        nodeNotes: safeNotes,
+        nodeData: migratedNodeData,
+      };
+    }
+  };
+
+  useEffect(() => {
+    if (!mapLoaded || !pendingNodeMigrationRef.current) return;
+    const pending = pendingNodeMigrationRef.current;
+    pendingNodeMigrationRef.current = null;
+    updateMapRow(pending.nodes, pending.edges, pending.nodeNotes, pending.nodeData);
+  }, [mapLoaded, updateMapRow]);
 
   const onEdgeDoubleClick = useCallback((e, edge) => {
     e.preventDefault();
@@ -570,18 +943,6 @@ const MapEditor = ({ mapId }) => {
     [nodes, updateMapRow, setEdges]
   );
 
-  const handleNoteChange = (e) => {
-    if (selectedNode) {
-      const newNote = e.target.value;
-      setNodeNotes((prev) => ({ ...prev, [selectedNode.id]: newNote }));
-    }
-  };
-  const handleNoteBlur = () => {
-    if (selectedNode) {
-      updateMapRow(nodes, edges);
-    }
-  };
-
   const onContextMenu = useCallback((event) => {
     event.preventDefault();
     const bounds = reactFlowWrapper.current.getBoundingClientRect();
@@ -605,12 +966,16 @@ const MapEditor = ({ mapId }) => {
       const newNodeId = (maxId + 1).toString();
 
       const userId = currentUser?.id || "unknown";
+      let preferredBorderColor = borderColor;
+      try {
+        preferredBorderColor = localStorage.getItem(LOCAL_NODE_BORDER_KEY) || borderColor;
+      } catch {}
 
       const newNode = {
         id: newNodeId,
-        data: { title: `Node ${newNodeId}` },
+        data: { title: `Node ${newNodeId}`, tags: [], nodeType: NODE_TYPE_DEFAULT },
         position,
-        style: { border: `2px solid ${borderColor}` },
+        style: { border: `2px solid ${preferredBorderColor}` },
         creator: userId,
         creationTimestamp: new Date().toISOString(),
       };
@@ -695,7 +1060,7 @@ const MapEditor = ({ mapId }) => {
   // ----- Shortcuts -----
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (disableShortcuts) return;
+      if (disableShortcuts || commandPaletteOpen) return;
       const a = document.activeElement;
       if (a?.tagName === "INPUT" || a?.tagName === "TEXTAREA" || a?.isContentEditable) return;
       if (event.key === "Delete" || event.key === "Backspace") onDelete();
@@ -703,13 +1068,45 @@ const MapEditor = ({ mapId }) => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDelete, addNode, disableShortcuts]);
+  }, [onDelete, addNode, disableShortcuts, commandPaletteOpen]);
+
+  useEffect(() => {
+    const handlePaletteShortcut = (event) => {
+      const isCmdK = (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey));
+      if (!isCmdK) return;
+      event.preventDefault();
+      setCommandPaletteOpen(true);
+      setCommandQuery("");
+    };
+    document.addEventListener("keydown", handlePaletteShortcut);
+    return () => document.removeEventListener("keydown", handlePaletteShortcut);
+  }, []);
+
+  useEffect(() => {
+    if (!commandPaletteOpen) return;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setCommandPaletteOpen(false);
+        setCommandQuery("");
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [commandPaletteOpen]);
+
+  useEffect(() => {
+    if (!commandPaletteOpen) return;
+    requestAnimationFrame(() => {
+      commandInputRef.current?.focus();
+    });
+  }, [commandPaletteOpen]);
 
   const onNodeClick = useCallback((_, node) => {
     setSelectedNode(node);
     setBorderColor(extractBorderColor(node) || "#64748B");
     setActiveSidebarPanel("node");
     setIsSidebarCollapsed(false);
+    setActiveNodeTab("content");
   }, []);
 
   useEffect(() => {
@@ -721,6 +1118,10 @@ const MapEditor = ({ mapId }) => {
     }
   }, [activeSidebarPanel, selectedNode, selectedEdge]);
 
+  useEffect(() => {
+    setTagInput("");
+  }, [selectedNode?.id]);
+
   const handleBorderColorChange = (color) => {
     if (!selectedNode) return;
     const updated = nodes.map((node) =>
@@ -728,15 +1129,363 @@ const MapEditor = ({ mapId }) => {
     );
     setNodes(updated);
     setBorderColor(color);
+    setActivePresetId("");
+    try {
+      localStorage.setItem(LOCAL_NODE_BORDER_KEY, color);
+      localStorage.removeItem(LOCAL_NODE_PRESET_KEY);
+    } catch {}
     updateMapRow(updated, edges);
   };
 
-  const handleLinkChange = (link) => {
+  const handleApplyPreset = (presetId) => {
     if (!selectedNode) return;
-    setNodeData((prev) => ({
-      ...prev,
-      [selectedNode.id]: { ...(prev[selectedNode.id] || {}), link },
-    }));
+    const preset = NODE_STYLE_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    const updated = nodes.map((node) =>
+      node.id === selectedNode.id
+        ? { ...node, style: { ...node.style, border: `2px solid ${preset.borderColor}` } }
+        : node
+    );
+    setNodes(updated);
+    setBorderColor(preset.borderColor);
+    setActivePresetId(preset.id);
+    try {
+      localStorage.setItem(LOCAL_NODE_BORDER_KEY, preset.borderColor);
+      localStorage.setItem(LOCAL_NODE_PRESET_KEY, preset.id);
+    } catch {}
+    updateMapRow(updated, edges);
+  };
+
+  const updateNodeDataFields = useCallback(
+    (nodeId, patch) => {
+      if (!nodeId) return;
+      setNodes((nds) => {
+        const updated = nds.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, ...patch } } : node
+        );
+        const nextSelected = updated.find((node) => node.id === nodeId);
+        if (nextSelected) {
+          setSelectedNode(nextSelected);
+        }
+        updateMapRow(updated, edges);
+        return updated;
+      });
+    },
+    [edges, updateMapRow, setNodes, setSelectedNode]
+  );
+
+  const handleNodeTypeChange = (event) => {
+    if (!selectedNode) return;
+    const nextType = event.target.value;
+    if (!NODE_TYPE_OPTIONS.includes(nextType)) return;
+    const currentType = getNodeType(selectedNode);
+    if (nextType === currentType) return;
+    const typeStyle = NODE_TYPE_STYLES[nextType];
+
+    setNodes((nds) => {
+      const updated = nds.map((node) => {
+        if (node.id !== selectedNode.id) return node;
+        const nextNode = { ...node, data: { ...node.data, nodeType: nextType } };
+        if (typeStyle?.borderColor) {
+          nextNode.style = { ...node.style, border: `2px solid ${typeStyle.borderColor}` };
+        }
+        return nextNode;
+      });
+      const nextSelected = updated.find((node) => node.id === selectedNode.id);
+      if (nextSelected) {
+        setSelectedNode(nextSelected);
+      }
+      if (typeStyle?.borderColor) {
+        setBorderColor(typeStyle.borderColor);
+      }
+      updateMapRow(updated, edges);
+      return updated;
+    });
+  };
+
+  const handleAddTag = () => {
+    if (!selectedNode) return;
+    const incoming = splitTagInput(tagInput);
+    if (!incoming.length) return;
+    const existing = getNodeTags(selectedNode);
+    const nextTags = dedupeTags([...existing, ...incoming]);
+    setTagInput("");
+    updateNodeDataFields(selectedNode.id, { tags: nextTags });
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    if (!selectedNode) return;
+    const existing = getNodeTags(selectedNode);
+    const nextTags = existing.filter(
+      (tag) => String(tag).toLowerCase() !== String(tagToRemove).toLowerCase()
+    );
+    updateNodeDataFields(selectedNode.id, { tags: nextTags });
+  };
+
+  const handleTagInputKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    handleAddTag();
+  };
+
+  const getBlocksForNodeId = (nodeId) => {
+    const entry = nodeData?.[nodeId];
+    return Array.isArray(entry?.blocks) ? entry.blocks : [];
+  };
+
+  const updateBlocksForNode = (nodeId, nextBlocks, { persist = false } = {}) => {
+    const primaryText = pickPrimaryTextFromBlocks(nextBlocks);
+    const primaryLink = pickPrimaryLinkFromBlocks(nextBlocks);
+    const nextNodeData = {
+      ...(nodeData || {}),
+      [nodeId]: { ...(nodeData?.[nodeId] || {}), blocks: nextBlocks, link: primaryLink },
+    };
+    const nextNodeNotes = { ...(nodeNotes || {}), [nodeId]: primaryText };
+    setNodeData(nextNodeData);
+    setNodeNotes(nextNodeNotes);
+    if (persist) {
+      updateMapRow(nodes, edges, nextNodeNotes, nextNodeData);
+    }
+  };
+
+  const updateBlockForNode = (nodeId, blockId, blockIndex, patch, { persist = false } = {}) => {
+    const nextBlocks = getBlocksForNodeId(nodeId).map((block, idx) => {
+      const matches = block?.id ? block.id === blockId : idx === blockIndex;
+      if (!matches) return block;
+      const nextId = block?.id || makeBlockId(block?.type || "block");
+      const nextCreatedAt = block?.createdAt || new Date().toISOString();
+      return { ...block, id: nextId, createdAt: nextCreatedAt, ...patch };
+    });
+    updateBlocksForNode(nodeId, nextBlocks, { persist });
+  };
+
+  const addBlockToNode = (nodeId, type) => {
+    if (!nodeId) return;
+    const createdAt = new Date().toISOString();
+    let newBlock = { id: makeBlockId(type), type, createdAt };
+    if (type === "text") newBlock = { ...newBlock, text: "" };
+    if (type === "image" || type === "video") newBlock = { ...newBlock, url: "", caption: "" };
+    if (type === "link") newBlock = { ...newBlock, url: "", label: "" };
+    const nextBlocks = [...getBlocksForNodeId(nodeId), newBlock];
+    updateBlocksForNode(nodeId, nextBlocks, { persist: true });
+  };
+
+  const handleAddBlock = (type) => {
+    if (!selectedNode) return;
+    addBlockToNode(selectedNode.id, type);
+  };
+
+  const handleRemoveBlock = (blockId, blockIndex) => {
+    if (!selectedNode) return;
+    const nextBlocks = getBlocksForNodeId(selectedNode.id).filter((block, idx) => {
+      if (block?.id) return block.id !== blockId;
+      return idx !== blockIndex;
+    });
+    updateBlocksForNode(selectedNode.id, nextBlocks, { persist: true });
+  };
+
+  const handleBlockFieldChange = (blockId, blockIndex, field, value) => {
+    if (!selectedNode) return;
+    updateBlockForNode(selectedNode.id, blockId, blockIndex, { [field]: value });
+  };
+
+  const handleMoveBlock = (blockId, blockIndex, direction) => {
+    if (!selectedNode) return;
+    const blocks = [...getBlocksForNodeId(selectedNode.id)];
+    if (!blocks.length) return;
+    const resolvedIndex = blockId ? blocks.findIndex((b) => b?.id === blockId) : blockIndex;
+    const fromIndex = resolvedIndex >= 0 ? resolvedIndex : blockIndex;
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= blocks.length) return;
+    const nextBlocks = [...blocks];
+    const [moved] = nextBlocks.splice(fromIndex, 1);
+    nextBlocks.splice(toIndex, 0, moved);
+    updateBlocksForNode(selectedNode.id, nextBlocks, { persist: true });
+  };
+
+  const handleBlockFileSelection = (blockId, file, kind, resetInput) => {
+    if (!file) return;
+    const validationError = getMediaValidationError(file, kind);
+    if (validationError) {
+      setBlockUploadState((prev) => ({ ...prev, [blockId]: { uploading: false, error: validationError } }));
+      if (resetInput) resetInput();
+      setPendingUploadFiles((prev) => {
+        const next = { ...prev };
+        delete next[blockId];
+        return next;
+      });
+      return;
+    }
+    setBlockUploadState((prev) => ({ ...prev, [blockId]: { ...prev[blockId], error: "" } }));
+    setPendingUploadFiles((prev) => ({ ...prev, [blockId]: file }));
+  };
+
+  const handleBlockUpload = async (blockId, blockIndex, kind) => {
+    if (!selectedNode) return;
+    const file = pendingUploadFiles?.[blockId];
+    if (!file) {
+      setBlockUploadState((prev) => ({
+        ...prev,
+        [blockId]: { ...prev[blockId], error: "Choose a file first." },
+      }));
+      return;
+    }
+    const validationError = getMediaValidationError(file, kind);
+    if (validationError) {
+      setBlockUploadState((prev) => ({ ...prev, [blockId]: { uploading: false, error: validationError } }));
+      return;
+    }
+
+    setBlockUploadState((prev) => ({ ...prev, [blockId]: { uploading: true, error: "" } }));
+    try {
+      let publicUrl = "";
+      let storagePath = "";
+      if (HAS_SUPABASE_STORAGE) {
+        const ext = getFileExtension(file.name) || (kind === "image" ? "png" : "mp4");
+        const path = `maps/${mapId}/${selectedNode.id}/${makeBlockId(kind)}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from(MEDIA_BUCKET)
+          .upload(path, file, { upsert: true, contentType: file.type });
+        if (upErr) throw upErr;
+        const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+        publicUrl = data?.publicUrl || "";
+        if (!publicUrl) throw new Error("Could not generate a public URL.");
+        storagePath = path;
+      } else if (process.env.NODE_ENV !== "production") {
+        if (file.size > LOCAL_MEDIA_UPLOAD_MAX_BYTES) {
+          throw new Error("File is too large for local storage fallback (3MB max).");
+        }
+        const dataUrl = await readFileAsDataUrl(file);
+        publicUrl = typeof dataUrl === "string" ? dataUrl : "";
+        if (!publicUrl) throw new Error("Local storage fallback failed.");
+      } else {
+        throw new Error("Uploads are not configured.");
+      }
+
+      updateBlockForNode(
+        selectedNode.id,
+        blockId,
+        blockIndex,
+        { url: publicUrl, storagePath: storagePath || "" },
+        { persist: true }
+      );
+      setPendingUploadFiles((prev) => {
+        const next = { ...prev };
+        delete next[blockId];
+        return next;
+      });
+    } catch (err) {
+      setBlockUploadState((prev) => ({
+        ...prev,
+        [blockId]: { uploading: false, error: err?.message || "Upload failed." },
+      }));
+    } finally {
+      setBlockUploadState((prev) => ({
+        ...prev,
+        [blockId]: { ...prev[blockId], uploading: false },
+      }));
+    }
+  };
+
+  const handleRemoveBlockMedia = async (blockId, blockIndex) => {
+    if (!selectedNode) return;
+    const blocks = getBlocksForNodeId(selectedNode.id);
+    const target =
+      blocks.find((block) => block?.id === blockId) || blocks[blockIndex];
+    if (!target) return;
+
+    setBlockUploadState((prev) => ({ ...prev, [blockId]: { uploading: true, error: "" } }));
+    try {
+      if (target.storagePath && HAS_SUPABASE_STORAGE) {
+        const { error } = await supabase.storage.from(MEDIA_BUCKET).remove([target.storagePath]);
+        if (error) throw error;
+      }
+      updateBlockForNode(selectedNode.id, blockId, blockIndex, { url: "", storagePath: "" }, { persist: true });
+      setPendingUploadFiles((prev) => {
+        const next = { ...prev };
+        delete next[blockId];
+        return next;
+      });
+    } catch (err) {
+      setBlockUploadState((prev) => ({
+        ...prev,
+        [blockId]: { uploading: false, error: err?.message || "Failed to remove file." },
+      }));
+      return;
+    }
+    setBlockUploadState((prev) => ({ ...prev, [blockId]: { uploading: false, error: "" } }));
+  };
+
+  const handleBlockBlur = () => {
+    if (!selectedNode) return;
+    updateMapRow(nodes, edges);
+  };
+
+  const handleDuplicateNode = (nodeId) => {
+    if (!nodeId) return;
+    const sourceNode = nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) return;
+    const maxId = nodes.length ? Math.max(...nodes.map((n) => parseInt(n.id))) : 0;
+    const newNodeId = (maxId + 1).toString();
+    const baseTitle = getNodeTitle(sourceNode) || `Node ${newNodeId}`;
+    const newNode = {
+      ...sourceNode,
+      id: newNodeId,
+      data: {
+        ...sourceNode.data,
+        title: baseTitle,
+        isEditing: false,
+        tags: getNodeTags(sourceNode),
+        nodeType: getNodeType(sourceNode),
+      },
+      position: { x: sourceNode.position.x + 40, y: sourceNode.position.y + 40 },
+      creator: currentUser?.id || sourceNode.creator || "unknown",
+      creationTimestamp: new Date().toISOString(),
+    };
+
+    const sourceBlocks = getBlocksForNodeId(nodeId);
+    const duplicatedBlocks = sourceBlocks.map((block) => {
+      if (!block) return block;
+      const { storagePath, ...rest } = block;
+      return {
+        ...rest,
+        id: makeBlockId(block.type || "block"),
+        createdAt: new Date().toISOString(),
+      };
+    });
+
+    const nextNodeData = {
+      ...(nodeData || {}),
+      [newNodeId]: {
+        ...(nodeData?.[nodeId] || {}),
+        blocks: duplicatedBlocks,
+        link: pickPrimaryLinkFromBlocks(duplicatedBlocks),
+      },
+    };
+    const nextNodeNotes = {
+      ...(nodeNotes || {}),
+      [newNodeId]: pickPrimaryTextFromBlocks(duplicatedBlocks),
+    };
+
+    const updatedNodes = [...nodes, newNode];
+    setNodes(updatedNodes);
+    setNodeData(nextNodeData);
+    setNodeNotes(nextNodeNotes);
+    updateMapRow(updatedNodes, edges, nextNodeNotes, nextNodeData);
+  };
+
+  const handleDeleteNodeById = (nodeId) => {
+    if (!nodeId) return;
+    const remainingNodes = nodes.filter((node) => node.id !== nodeId);
+    const remainingEdges = edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+    setNodes(remainingNodes);
+    setEdges(remainingEdges);
+    setSelectedElements((prev) => prev.filter((id) => id !== nodeId));
+    if (selectedNode?.id === nodeId) {
+      setSelectedNode(null);
+      setActiveSidebarPanel("settings");
+    }
+    updateMapRow(remainingNodes, remainingEdges);
   };
 
   const toggleSettingsSection = (section) => {
@@ -758,12 +1507,39 @@ const MapEditor = ({ mapId }) => {
     });
   };
 
+  const selectNodeById = useCallback(
+    (nodeId, { center = false } = {}) => {
+      if (!nodeId) return;
+      const target = nodes.find((node) => node.id === nodeId);
+      if (!target) return;
+      setSelectedNode(target);
+      setSelectedEdge(null);
+      setSelectedElements([nodeId]);
+      setActiveSidebarPanel("node");
+      setIsSidebarCollapsed(false);
+      setActiveNodeTab("content");
+      setNodes((nds) =>
+        nds.map((node) => ({ ...node, selected: node.id === nodeId }))
+      );
+      if (center && rf?.setCenter) {
+        const width = typeof target.width === "number" ? target.width : 0;
+        const height = typeof target.height === "number" ? target.height : 0;
+        const cx = target.position.x + width / 2;
+        const cy = target.position.y + height / 2;
+        rf.setCenter(cx, cy, { zoom: 1.2, duration: 300 });
+      }
+    },
+    [nodes, rf, setNodes]
+  );
+
   // Render node label with creator info and date (display-only JSX)
-  const renderNode = (node) => {
+  const renderNode = (node, { isDimmed = false } = {}) => {
     const creatorInfo = nodeCreators[node.creator];
     const creationDate = new Date(node.creationTimestamp).toLocaleDateString();
     const creatorUsername = creatorInfo?.username || "Unknown Username";
     const title = getNodeTitle(node);
+    const nodeType = getNodeType(node);
+    const typeColor = NODE_TYPE_STYLES[nodeType]?.borderColor || "#64748B";
     const nodeBorderColor = extractBorderColor(node);
     const nodeStyle = node.style?.border
       ? { border: node.style.border }
@@ -771,11 +1547,19 @@ const MapEditor = ({ mapId }) => {
       ? { borderColor: nodeBorderColor }
       : undefined;
     const isSelected = !!node.selected;
+    const nodeBlocks = getBlocksForNodeId(node.id);
+    const snippet = getSnippetFromBlocks(nodeBlocks);
+    const { hasText, hasImage, hasVideo, hasLink } = getBlockTypePresence(nodeBlocks);
+    const hasIcons = hasText || hasImage || hasVideo || hasLink;
+    const nodeData = node.data || {};
 
-    if (node.data.isEditing) {
+    if (nodeData.isEditing) {
       const isThisEditing = node.id === editingNodeId;
       return (
-        <div className={`me-node glass ${isSelected ? "is-selected" : ""}`} style={nodeStyle}>
+        <div
+          className={`me-node glass ${isSelected ? "is-selected" : ""} ${isDimmed ? "is-dimmed" : ""}`}
+          style={nodeStyle}
+        >
           <input
             type="text"
             value={isThisEditing ? pendingLabel : title}
@@ -801,9 +1585,104 @@ const MapEditor = ({ mapId }) => {
     }
 
     return (
-      <div className={`me-node glass ${isSelected ? "is-selected" : ""}`} style={nodeStyle}>
+      <div
+        className={`me-node glass ${isSelected ? "is-selected" : ""} ${isDimmed ? "is-dimmed" : ""}`}
+        style={nodeStyle}
+      >
         <div className="me-node-content">
-          <span className="me-node-title">{title}</span>
+          <div className="me-node-header">
+            <span className="me-node-title">{title}</span>
+            {nodeType && (
+              <span className="nodeTypeBadge" style={{ borderColor: typeColor, color: typeColor }}>
+                {nodeType}
+              </span>
+            )}
+          </div>
+          {snippet && <span className="me-node-snippet">{snippet}</span>}
+          {hasIcons && (
+            <div className="me-node-icons">
+              {hasText && (
+                <span className="me-node-icon" title="Text">
+                  📝
+                </span>
+              )}
+              {hasLink && (
+                <span className="me-node-icon" title="Link">
+                  🔗
+                </span>
+              )}
+              {hasImage && (
+                <span className="me-node-icon" title="Image">
+                  🖼️
+                </span>
+              )}
+              {hasVideo && (
+                <span className="me-node-icon" title="Video">
+                  🎥
+                </span>
+              )}
+            </div>
+          )}
+          <div
+            className="nodeQuickActions"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="nodeQuickAction"
+              title="Add text block"
+              aria-label="Add text block"
+              onClick={() => addBlockToNode(node.id, "text")}
+            >
+              T
+            </button>
+            <button
+              type="button"
+              className="nodeQuickAction"
+              title="Add link block"
+              aria-label="Add link block"
+              onClick={() => addBlockToNode(node.id, "link")}
+            >
+              🔗
+            </button>
+            <button
+              type="button"
+              className="nodeQuickAction"
+              title="Add image block"
+              aria-label="Add image block"
+              onClick={() => addBlockToNode(node.id, "image")}
+            >
+              🖼️
+            </button>
+            <button
+              type="button"
+              className="nodeQuickAction"
+              title="Add video block"
+              aria-label="Add video block"
+              onClick={() => addBlockToNode(node.id, "video")}
+            >
+              🎥
+            </button>
+            <button
+              type="button"
+              className="nodeQuickAction"
+              title="Duplicate node"
+              aria-label="Duplicate node"
+              onClick={() => handleDuplicateNode(node.id)}
+            >
+              ⧉
+            </button>
+            <button
+              type="button"
+              className="nodeQuickAction is-danger"
+              title="Delete node"
+              aria-label="Delete node"
+              onClick={() => handleDeleteNodeById(node.id)}
+            >
+              ✕
+            </button>
+          </div>
           {isSelected && (
             <div className="me-node-meta">
               {creatorUsername} - {creationDate}
@@ -833,18 +1712,22 @@ const MapEditor = ({ mapId }) => {
       }
       if (!mounted) return;
 
-      setNodes(m?.nodes || []);
-      setEdges(m?.edges || []);
+      const loadedNodes = m?.nodes || [];
+      const loadedEdges = m?.edges || [];
+      const loadedNotes = m?.node_notes || {};
+      const loadedData = m?.node_data || {};
+
+      setNodes(loadedNodes);
+      setEdges(loadedEdges);
       setMapName(m?.name || "");
       setMapDescription(m?.description || "");
-      setNodeNotes(m?.node_notes || {});
-      setNodeData(m?.node_data || {});
+      applyNodeDataMigration(loadedNodes, loadedEdges, loadedNotes, loadedData);
       setLastEdited(m?.last_edited ? new Date(m.last_edited).toLocaleString() : "Not available");
       setMapLoaded(true);
       prevMapRef.current = m;
 
       const creatorIds = Array.from(
-        new Set((m?.nodes || []).map((n) => n.creator).filter((c) => !!c && c !== "unknown"))
+        new Set(loadedNodes.map((n) => n.creator).filter((c) => !!c && c !== "unknown"))
       );
       if (creatorIds.length) {
         const { data: profs } = await supabase
@@ -866,12 +1749,16 @@ const MapEditor = ({ mapId }) => {
           { event: "UPDATE", schema: "public", table: "maps", filter: `id=eq.${mapId}` },
           (payload) => {
             const m2 = payload.new;
-            setNodes(m2.nodes || []);
-            setEdges(m2.edges || []);
+            const nextNodes = m2.nodes || [];
+            const nextEdges = m2.edges || [];
+            const nextNotes = m2.node_notes || {};
+            const nextData = m2.node_data || {};
+
+            setNodes(nextNodes);
+            setEdges(nextEdges);
             setMapName(m2.name || "");
             setMapDescription(m2.description || "");
-            setNodeNotes(m2.node_notes || {});
-            setNodeData(m2.node_data || {});
+            applyNodeDataMigration(nextNodes, nextEdges, nextNotes, nextData);
             setLastEdited(
               m2.last_edited ? new Date(m2.last_edited).toLocaleString() : "Not available"
             );
@@ -1094,6 +1981,115 @@ const MapEditor = ({ mapId }) => {
   const isNodePanelActive = activeSidebarPanel === "node" && selectedNode;
   const isEdgePanelActive = activeSidebarPanel === "edge" && selectedEdge;
   const isSettingsPanelActive = !isNodePanelActive && !isEdgePanelActive;
+  const selectedNodeBlocks = selectedNode ? getBlocksForNodeId(selectedNode.id) : [];
+  const selectedNodeTags = selectedNode ? getNodeTags(selectedNode) : [];
+  const selectedNodeType = selectedNode ? getNodeType(selectedNode) : NODE_TYPE_DEFAULT;
+  const allTags = Array.from(
+    new Set(nodes.flatMap((node) => getNodeTags(node)))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const normalizedFilterQuery = filterQuery.trim().toLowerCase();
+  const normalizedTagFilter = activeTagFilter.trim().toLowerCase();
+  const filterQueryValue = normalizedFilterQuery.startsWith("#")
+    ? normalizedFilterQuery.slice(1)
+    : normalizedFilterQuery;
+  const isFilterActive = Boolean(filterQueryValue || normalizedTagFilter);
+
+  const matchesFilter = (node) => {
+    const title = getNodeTitle(node).toLowerCase();
+    const tags = getNodeTags(node).map((tag) => String(tag).toLowerCase());
+    const queryMatch =
+      !filterQueryValue ||
+      title.includes(filterQueryValue) ||
+      tags.some((tag) => tag.includes(filterQueryValue));
+    const tagMatch = !normalizedTagFilter || tags.includes(normalizedTagFilter);
+    return queryMatch && tagMatch;
+  };
+
+  const filterMatches = new Set(nodes.filter(matchesFilter).map((node) => node.id));
+
+  const focusNodeIds =
+    focusMode && selectedNode
+      ? (() => {
+          const ids = new Set([selectedNode.id]);
+          edges.forEach((edge) => {
+            if (edge.source === selectedNode.id) ids.add(edge.target);
+            if (edge.target === selectedNode.id) ids.add(edge.source);
+          });
+          return ids;
+        })()
+      : null;
+
+  const displayNodes = (focusNodeIds ? nodes.filter((node) => focusNodeIds.has(node.id)) : nodes).map(
+    (node) => {
+      const isDimmed = isFilterActive && !filterMatches.has(node.id);
+      const style = isDimmed ? { ...node.style, opacity: 0.25 } : node.style;
+      return {
+        ...node,
+        style,
+        data: { ...(node.data || {}), label: renderNode(node, { isDimmed }) },
+      };
+    }
+  );
+
+  const displayEdges = (focusNodeIds
+    ? edges.filter((edge) => focusNodeIds.has(edge.source) && focusNodeIds.has(edge.target))
+    : edges
+  ).map((edge) => {
+    if (!isFilterActive) return edge;
+    const sourceMatch = filterMatches.has(edge.source);
+    const targetMatch = filterMatches.has(edge.target);
+    const baseOpacity =
+      edge.style?.strokeOpacity ?? DEFAULT_EDGE_STYLE.strokeOpacity ?? 1;
+    const strokeOpacity = sourceMatch && targetMatch ? baseOpacity : Math.min(0.15, baseOpacity);
+    return { ...edge, style: { ...edge.style, strokeOpacity } };
+  });
+
+  const normalizedCommandQuery = commandQuery.trim().toLowerCase();
+  const paletteResults = normalizedCommandQuery
+    ? nodes
+        .map((node) => {
+          const title = getNodeTitle(node);
+          const lowerTitle = title.toLowerCase();
+          const blocks = getBlocksForNodeId(node.id);
+          const textMatch = blocks.some(
+            (block) =>
+              block?.type === "text" &&
+              normalizeBlockText(block.text).toLowerCase().includes(normalizedCommandQuery)
+          );
+          const titleMatch = lowerTitle.includes(normalizedCommandQuery);
+          if (!titleMatch && !textMatch) return null;
+          return { node, title, snippet: getSnippetFromBlocks(blocks) };
+        })
+        .filter(Boolean)
+        .slice(0, 50)
+    : [];
+
+  const backlinkItems = selectedNode
+    ? (() => {
+        const map = new Map();
+        edges.forEach((edge) => {
+          if (edge.source === selectedNode.id) {
+            const entry = map.get(edge.target) || { id: edge.target, incoming: false, outgoing: false };
+            entry.outgoing = true;
+            map.set(edge.target, entry);
+          }
+          if (edge.target === selectedNode.id) {
+            const entry = map.get(edge.source) || { id: edge.source, incoming: false, outgoing: false };
+            entry.incoming = true;
+            map.set(edge.source, entry);
+          }
+        });
+        return Array.from(map.values())
+          .map((entry) => {
+            const node = nodes.find((n) => n.id === entry.id);
+            if (!node) return null;
+            const direction = entry.incoming && entry.outgoing ? "Both" : entry.incoming ? "Incoming" : "Outgoing";
+            return { id: entry.id, node, title: getNodeTitle(node), direction };
+          })
+          .filter(Boolean);
+      })()
+    : [];
   const accentColor = deriveAccentColor(bgColor);
   const glassTint = toRgba(bgPageColor, 0.14) || "rgba(255,255,255,0.12)";
   const glassBorder = toRgba(bgColor, 0.32) || "rgba(255,255,255,0.3)";
@@ -1114,11 +2110,8 @@ const MapEditor = ({ mapId }) => {
         <div ref={reactFlowWrapper} className="mapStage map-editor reactflowWrapper">
           <div className="mapCanvas">
             <ReactFlow
-              nodes={nodes.map((node) => ({
-                ...node,
-                data: { ...node.data, label: renderNode(node) },
-            }))}
-            edges={edges}
+              nodes={displayNodes}
+            edges={displayEdges}
             defaultEdgeOptions={{
               style: { ...DEFAULT_EDGE_STYLE },
             }}
@@ -1292,6 +2285,7 @@ const MapEditor = ({ mapId }) => {
                         title="Actions"
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
+                        alwaysOpen
                       >
                         <div className="sidebarActions">
                           <button onClick={refreshPage} className="btn-primary">
@@ -1301,15 +2295,113 @@ const MapEditor = ({ mapId }) => {
                       </SidebarSection>
 
                       <SidebarSection
+                        id="filter"
+                        title="Filter & Focus"
+                        activeId={activeSettingsSection}
+                        onToggle={toggleSettingsSection}
+                        alwaysOpen
+                      >
+                        <div className="me-field">
+                          <label className="me-label">Search nodes</label>
+                          <div className="filterRow">
+                            <input
+                              type="text"
+                              className="me-input"
+                              placeholder="Search title or #tag"
+                              value={filterQuery}
+                              onChange={(e) => setFilterQuery(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="filterClearButton"
+                              onClick={() => {
+                                setFilterQuery("");
+                                setActiveTagFilter("");
+                              }}
+                              disabled={!isFilterActive}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          <div className="me-meta">
+                            Matches node titles and tags. Use #tag for tags.
+                          </div>
+                        </div>
+
+                        {activeTagFilter && (
+                          <div className="filterActiveTag">
+                            <span className="filterLabel">Tag filter</span>
+                            <button
+                              type="button"
+                              className="tagChipButton is-active"
+                              onClick={() => setActiveTagFilter("")}
+                            >
+                              {activeTagFilter} ×
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="tagList">
+                          {allTags.length === 0 ? (
+                            <div className="me-meta">No tags yet.</div>
+                          ) : (
+                            allTags.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                className={`tagChipButton ${activeTagFilter === tag ? "is-active" : ""}`}
+                                onClick={() => setActiveTagFilter(tag)}
+                              >
+                                {tag}
+                              </button>
+                            ))
+                          )}
+                        </div>
+
+                        <div className="filterDivider" />
+
+                        <label className="toggleRow" htmlFor="toggle-focus">
+                          <span className="toggleText">Focus mode</span>
+                          <span className="toggleSwitch">
+                            <input
+                              id="toggle-focus"
+                              type="checkbox"
+                              checked={focusMode}
+                              onChange={(e) => setFocusMode(e.target.checked)}
+                            />
+                            <span className="toggleSlider" />
+                          </span>
+                        </label>
+                        <div className="me-meta">
+                          Shows the selected node and its direct neighbors.
+                        </div>
+                        {focusMode && (
+                          <div className="focusRow">
+                            <button
+                              type="button"
+                              className="focusExitButton"
+                              onClick={() => setFocusMode(false)}
+                            >
+                              Exit focus
+                            </button>
+                            {!selectedNode && (
+                              <span className="me-meta">Select a node to focus.</span>
+                            )}
+                          </div>
+                        )}
+                      </SidebarSection>
+
+                      <SidebarSection
                         id="appearance"
                         title="Appearance"
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
+                        alwaysOpen
                       >
                         <div className="me-field">
                           <span className="me-label">Background</span>
-                          <div className="radioGroup">
-                            <label className="radioOption">
+                          <div className="segmentedControl" role="radiogroup" aria-label="Background style">
+                            <label className={`segment ${bgStyle === "dots" ? "is-active" : ""}`}>
                               <input
                                 type="radio"
                                 name="bgStyle"
@@ -1317,9 +2409,12 @@ const MapEditor = ({ mapId }) => {
                                 checked={bgStyle === "dots"}
                                 onChange={() => setBgStyle("dots")}
                               />
-                              Dots
+                              <span className="segmentContent">
+                                <span className="segmentIcon segmentIcon-dots" aria-hidden="true" />
+                                <span>Dots</span>
+                              </span>
                             </label>
-                            <label className="radioOption">
+                            <label className={`segment ${bgStyle === "lines" ? "is-active" : ""}`}>
                               <input
                                 type="radio"
                                 name="bgStyle"
@@ -1327,9 +2422,12 @@ const MapEditor = ({ mapId }) => {
                                 checked={bgStyle === "lines"}
                                 onChange={() => setBgStyle("lines")}
                               />
-                              Lines
+                              <span className="segmentContent">
+                                <span className="segmentIcon segmentIcon-lines" aria-hidden="true" />
+                                <span>Lines</span>
+                              </span>
                             </label>
-                            <label className="radioOption">
+                            <label className={`segment ${bgStyle === "none" ? "is-active" : ""}`}>
                               <input
                                 type="radio"
                                 name="bgStyle"
@@ -1337,43 +2435,43 @@ const MapEditor = ({ mapId }) => {
                                 checked={bgStyle === "none"}
                                 onChange={() => setBgStyle("none")}
                               />
-                              None
+                              <span className="segmentContent">
+                                <span className="segmentIcon segmentIcon-none" aria-hidden="true" />
+                                <span>None</span>
+                              </span>
                             </label>
                           </div>
                         </div>
 
-                        <div className="me-field">
-                          <label className="me-label">Canvas color</label>
-                          <input
-                            type="color"
-                            className="me-color"
-                            value={bgPageColor}
-                            onChange={(e) => setBgPageColor(e.target.value)}
-                            title="Background fill behind the grid"
-                          />
-                        </div>
+                        <ColorControl
+                          id="canvas-color"
+                          label="Canvas color"
+                          value={bgPageColor}
+                          onChange={setBgPageColor}
+                          onCopy={copyToClipboard}
+                          pickerTitle="Background fill behind the grid"
+                        />
 
-                        <div className="me-field">
-                          <label className="me-label">Grid color</label>
-                          <input
-                            type="color"
-                            className="me-color"
-                            value={bgColor}
-                            onChange={(e) => setBgColor(e.target.value)}
-                          />
-                        </div>
+                        <ColorControl
+                          id="grid-color"
+                          label="Grid color"
+                          value={bgColor}
+                          onChange={setBgColor}
+                          onCopy={copyToClipboard}
+                        />
 
-                        <div className="me-field me-field-inline">
-                          <input
-                            id="toggle-minimap"
-                            type="checkbox"
-                            checked={minimapEnabled}
-                            onChange={(e) => setMinimapEnabled(e.target.checked)}
-                          />
-                          <label htmlFor="toggle-minimap" className="me-label">
-                            Show MiniMap
-                          </label>
-                        </div>
+                        <label className="toggleRow" htmlFor="toggle-minimap">
+                          <span className="toggleText">Show MiniMap</span>
+                          <span className="toggleSwitch">
+                            <input
+                              id="toggle-minimap"
+                              type="checkbox"
+                              checked={minimapEnabled}
+                              onChange={(e) => setMinimapEnabled(e.target.checked)}
+                            />
+                            <span className="toggleSlider" />
+                          </span>
+                        </label>
                       </SidebarSection>
 
                       <SidebarSection
@@ -1381,6 +2479,7 @@ const MapEditor = ({ mapId }) => {
                         title="Cursors"
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
+                        alwaysOpen
                       >
                         <div className="me-field">
                           <label className="me-label">Cursor FPS: {cursorFps}</label>
@@ -1396,29 +2495,31 @@ const MapEditor = ({ mapId }) => {
                           <small className="me-help">Higher FPS = smoother, but more messages.</small>
                         </div>
 
-                        <div className="me-field me-field-inline">
-                          <input
-                            id="toggle-my-cursor"
-                            type="checkbox"
-                            checked={showMyCursor}
-                            onChange={(e) => setShowMyCursor(e.target.checked)}
-                          />
-                          <label htmlFor="toggle-my-cursor" className="me-label">
-                            Show my cursor
-                          </label>
-                        </div>
+                        <label className="toggleRow" htmlFor="toggle-my-cursor">
+                          <span className="toggleText">Show my cursor</span>
+                          <span className="toggleSwitch">
+                            <input
+                              id="toggle-my-cursor"
+                              type="checkbox"
+                              checked={showMyCursor}
+                              onChange={(e) => setShowMyCursor(e.target.checked)}
+                            />
+                            <span className="toggleSlider" />
+                          </span>
+                        </label>
 
-                        <div className="me-field me-field-inline">
-                          <input
-                            id="toggle-others-cursor"
-                            type="checkbox"
-                            checked={showOthersCursors}
-                            onChange={(e) => setShowOthersCursors(e.target.checked)}
-                          />
-                          <label htmlFor="toggle-others-cursor" className="me-label">
-                            Show others' cursors
-                          </label>
-                        </div>
+                        <label className="toggleRow" htmlFor="toggle-others-cursor">
+                          <span className="toggleText">Show others' cursors</span>
+                          <span className="toggleSwitch">
+                            <input
+                              id="toggle-others-cursor"
+                              type="checkbox"
+                              checked={showOthersCursors}
+                              onChange={(e) => setShowOthersCursors(e.target.checked)}
+                            />
+                            <span className="toggleSlider" />
+                          </span>
+                        </label>
                       </SidebarSection>
 
                       <SidebarSection
@@ -1426,6 +2527,7 @@ const MapEditor = ({ mapId }) => {
                         title="Learning Space"
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
+                        alwaysOpen
                       >
                         <div className="me-field">
                           <label className="me-label">Learning Space Name</label>
@@ -1452,12 +2554,22 @@ const MapEditor = ({ mapId }) => {
 
                         <div className="me-field">
                           <label className="me-label">Learning Space ID</label>
-                          <div className="me-chip">{mapId}</div>
+                          <div className="inlineRow">
+                            <div className="me-chip">{mapId}</div>
+                            <button
+                              type="button"
+                              className="copyButton"
+                              onClick={() => copyToClipboard(mapId)}
+                              aria-label="Copy Learning Space ID"
+                            >
+                              Copy
+                            </button>
+                          </div>
                         </div>
 
                         <div className="me-field">
                           <label className="me-label">Last Edited</label>
-                          <div className="me-chip">{lastEdited}</div>
+                          <div className="me-meta">{lastEdited}</div>
                         </div>
                       </SidebarSection>
 
@@ -1466,6 +2578,7 @@ const MapEditor = ({ mapId }) => {
                         title={`Participants (${participants.length})`}
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
+                        alwaysOpen
                       >
                         <ul className="participantList">
                           {participants.map((p) => (
@@ -1501,6 +2614,7 @@ const MapEditor = ({ mapId }) => {
                         activeId={activeSettingsSection}
                         onToggle={toggleSettingsSection}
                         sectionRef={shortcutsSectionRef}
+                        alwaysOpen
                       >
                         <ul className="shortcutsList">
                           <li>
@@ -1534,93 +2648,511 @@ const MapEditor = ({ mapId }) => {
                     <div className="sidebarPanel glass" ref={nodeDetailsPanelRef}>
                       <div className="sidebarPanelHeader">
                         <h3>Node Details</h3>
-                        <button onClick={() => setActiveSidebarPanel("settings")} className="btn-close">
-                          Close
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarPanel("settings")}
+                          className="panelCloseButton"
+                          aria-label="Close node details"
+                        >
+                          X
                         </button>
                       </div>
 
                       <div className="sidebarPanelBody">
-                        <div className="nodeDetailsHeader glass">
-                          <div>
-                            <div className="nodeDetailsTitle">
-                              {nodeCreators[selectedNode.creator]?.username || "Unknown Creator"}
+                        <div className="nodeTabs" role="tablist" aria-label="Node tabs">
+                          <button
+                            type="button"
+                            className={`nodeTab ${activeNodeTab === "content" ? "is-active" : ""}`}
+                            onClick={() => setActiveNodeTab("content")}
+                            role="tab"
+                            aria-selected={activeNodeTab === "content"}
+                          >
+                            Content
+                          </button>
+                          <button
+                            type="button"
+                            className={`nodeTab ${activeNodeTab === "style" ? "is-active" : ""}`}
+                            onClick={() => setActiveNodeTab("style")}
+                            role="tab"
+                            aria-selected={activeNodeTab === "style"}
+                          >
+                            Style
+                          </button>
+                          <button
+                            type="button"
+                            className={`nodeTab ${activeNodeTab === "details" ? "is-active" : ""}`}
+                            onClick={() => setActiveNodeTab("details")}
+                            role="tab"
+                            aria-selected={activeNodeTab === "details"}
+                          >
+                            Details
+                          </button>
+                        </div>
+
+                        {activeNodeTab === "content" && (
+                          <div className="nodeTabPanel">
+                            <div className="nodeBlockActions">
+                              <button
+                                type="button"
+                                className="nodeBlockButton"
+                                onClick={() => handleAddBlock("text")}
+                              >
+                                Add Text
+                              </button>
+                              <button
+                                type="button"
+                                className="nodeBlockButton"
+                                onClick={() => handleAddBlock("image")}
+                              >
+                                Add Image
+                              </button>
+                              <button
+                                type="button"
+                                className="nodeBlockButton"
+                                onClick={() => handleAddBlock("video")}
+                              >
+                                Add Video
+                              </button>
+                              <button
+                                type="button"
+                                className="nodeBlockButton"
+                                onClick={() => handleAddBlock("link")}
+                              >
+                                Add Link
+                              </button>
                             </div>
-                            <div className="nodeDetailsMeta">
-                              Created: {new Date(selectedNode.creationTimestamp).toLocaleDateString()}
+
+                            {selectedNodeBlocks.length === 0 ? (
+                              <div className="nodeBlocksEmpty">
+                                No content yet. Add a block to get started.
+                              </div>
+                            ) : (
+                              <div className="nodeBlockList">
+                                {selectedNodeBlocks.map((block, index) => {
+                                  const blockKey = block?.id || `${block?.type || "block"}-${index}`;
+                                  const blockTitle = block?.type
+                                    ? `${block.type.charAt(0).toUpperCase()}${block.type.slice(1)}`
+                                    : "Block";
+                                  const isFirst = index === 0;
+                                  const isLast = index === selectedNodeBlocks.length - 1;
+                                  const uploadState = blockUploadState?.[blockKey] || {};
+                                  const isUploading = !!uploadState.uploading;
+                                  const uploadError = uploadState.error;
+                                  const pendingFile = pendingUploadFiles?.[blockKey];
+                                  const blockUrl = normalizeBlockText(block?.url);
+                                  const videoEmbedUrl = blockUrl ? getVideoEmbedUrl(blockUrl) : "";
+                                  const isDirectVideo = blockUrl ? isDirectVideoUrl(blockUrl) : false;
+                                  return (
+                                    <div key={blockKey} className="nodeBlockCard">
+                                      <div className="nodeBlockHeader">
+                                        <span className="nodeBlockTitle">{blockTitle}</span>
+                                        <div className="nodeBlockControls">
+                                          <button
+                                            type="button"
+                                            className="nodeBlockReorder"
+                                            onClick={() => handleMoveBlock(blockKey, index, -1)}
+                                            disabled={isFirst}
+                                            title="Move up"
+                                            aria-label="Move block up"
+                                          >
+                                            ↑
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="nodeBlockReorder"
+                                            onClick={() => handleMoveBlock(blockKey, index, 1)}
+                                            disabled={isLast}
+                                            title="Move down"
+                                            aria-label="Move block down"
+                                          >
+                                            ↓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="nodeBlockRemove"
+                                            onClick={() => handleRemoveBlock(blockKey, index)}
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {block?.type === "text" && (
+                                        <div className="me-field">
+                                          <label className="me-label">Text</label>
+                                          <textarea
+                                            value={block.text || ""}
+                                            onChange={(e) =>
+                                              handleBlockFieldChange(blockKey, index, "text", e.target.value)
+                                            }
+                                            onBlur={handleBlockBlur}
+                                            placeholder="Write a note..."
+                                            className="me-textarea"
+                                            rows={3}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {(block?.type === "image" || block?.type === "video") && (
+                                        <>
+                                          <div className="me-field">
+                                            <label className="me-label">URL</label>
+                                            <input
+                                              type="text"
+                                              value={block.url || ""}
+                                              onChange={(e) =>
+                                                handleBlockFieldChange(blockKey, index, "url", e.target.value)
+                                              }
+                                              onBlur={handleBlockBlur}
+                                              placeholder={`Add a ${block.type} URL`}
+                                              className="me-input"
+                                              disabled={isUploading}
+                                            />
+                                          </div>
+                                          <div className="nodeBlockUploadRow">
+                                            <input
+                                              type="file"
+                                              className="nodeBlockUploadInput"
+                                              accept={
+                                                block.type === "image"
+                                                  ? ".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                                                  : ".mp4,.webm,.mov,video/mp4,video/webm,video/quicktime"
+                                              }
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                handleBlockFileSelection(
+                                                  blockKey,
+                                                  file,
+                                                  block.type,
+                                                  () => {
+                                                    e.target.value = "";
+                                                  }
+                                                );
+                                              }}
+                                              disabled={isUploading}
+                                            />
+                                            <button
+                                              type="button"
+                                              className="nodeBlockUploadButton"
+                                              onClick={() => handleBlockUpload(blockKey, index, block.type)}
+                                              disabled={isUploading || !pendingFile}
+                                            >
+                                              {isUploading ? (
+                                                <>
+                                                  <span className="uploadSpinner" aria-hidden="true" />
+                                                  Uploading...
+                                                </>
+                                              ) : (
+                                                "Upload"
+                                              )}
+                                            </button>
+                                            {blockUrl && (
+                                              <button
+                                                type="button"
+                                                className="nodeBlockUploadButton is-ghost"
+                                                onClick={() => handleRemoveBlockMedia(blockKey, index)}
+                                                disabled={isUploading}
+                                              >
+                                                Remove
+                                              </button>
+                                            )}
+                                          </div>
+                                          {pendingFile && !isUploading && (
+                                            <div className="nodeBlockUploadHint">Selected: {pendingFile.name}</div>
+                                          )}
+                                          {uploadError && <div className="nodeBlockUploadError">{uploadError}</div>}
+                                          <div className="me-field">
+                                            <label className="me-label">Caption (optional)</label>
+                                            <input
+                                              type="text"
+                                              value={block.caption || ""}
+                                              onChange={(e) =>
+                                                handleBlockFieldChange(blockKey, index, "caption", e.target.value)
+                                              }
+                                              onBlur={handleBlockBlur}
+                                              placeholder="Add a caption"
+                                              className="me-input"
+                                              disabled={isUploading}
+                                            />
+                                          </div>
+                                          {block?.type === "image" && blockUrl && (
+                                            <img
+                                              src={block.url}
+                                              alt={block.caption || "Image preview"}
+                                              className="nodeBlockImagePreview"
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = "none";
+                                              }}
+                                            />
+                                          )}
+                                          {block?.type === "video" && blockUrl && (
+                                            <>
+                                              {isDirectVideo && (
+                                                <video
+                                                  className="nodeBlockVideoPreview"
+                                                  src={block.url}
+                                                  controls
+                                                  preload="metadata"
+                                                />
+                                              )}
+                                              {!isDirectVideo && videoEmbedUrl && (
+                                                <div className="nodeBlockVideoEmbed">
+                                                  <iframe
+                                                    src={videoEmbedUrl}
+                                                    title="Video preview"
+                                                    frameBorder="0"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                  />
+                                                </div>
+                                              )}
+                                              {!isDirectVideo && !videoEmbedUrl && (
+                                                <div className="nodeBlockVideoFallback">
+                                                  Preview not available
+                                                </div>
+                                              )}
+                                              <a
+                                                href={block.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="nodeBlockLink"
+                                              >
+                                                Open video
+                                              </a>
+                                            </>
+                                          )}
+                                        </>
+                                      )}
+
+                                      {block?.type === "link" && (
+                                        <>
+                                          <div className="me-field">
+                                            <label className="me-label">URL</label>
+                                            <input
+                                              type="text"
+                                              value={block.url || ""}
+                                              onChange={(e) =>
+                                                handleBlockFieldChange(blockKey, index, "url", e.target.value)
+                                              }
+                                              onBlur={handleBlockBlur}
+                                              placeholder="Add a link URL"
+                                              className="me-input"
+                                            />
+                                          </div>
+                                          <div className="me-field">
+                                            <label className="me-label">Label (optional)</label>
+                                            <input
+                                              type="text"
+                                              value={block.label || ""}
+                                              onChange={(e) =>
+                                                handleBlockFieldChange(blockKey, index, "label", e.target.value)
+                                              }
+                                              onBlur={handleBlockBlur}
+                                              placeholder="Short label"
+                                              className="me-input"
+                                            />
+                                          </div>
+                                          {normalizeBlockText(block.url) && (
+                                            <a
+                                              href={block.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="nodeBlockLink"
+                                            >
+                                              Open link
+                                            </a>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {activeNodeTab === "style" && (
+                          <div className="nodeTabPanel">
+                            <div className="nodePresetSection">
+                              <div className="nodePresetLabel">Presets</div>
+                              <div className="nodePresetList">
+                                {NODE_STYLE_PRESETS.map((preset) => (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    className={`nodePresetButton ${
+                                      activePresetId === preset.id ? "is-active" : ""
+                                    }`}
+                                    onClick={() => handleApplyPreset(preset.id)}
+                                    disabled={!selectedNode}
+                                    title={`Apply ${preset.label} preset`}
+                                    aria-label={`Apply ${preset.label} preset`}
+                                  >
+                                    <span
+                                      className="nodePresetSwatch"
+                                      style={{ backgroundColor: preset.borderColor }}
+                                    />
+                                    {preset.label}
+                                  </button>
+                                ))}
+                              </div>
+                              {!selectedNode && (
+                                <div className="nodePresetHint">Select a node to apply a preset.</div>
+                              )}
+                            </div>
+                            <ColorControl
+                              id="node-border-color"
+                              label="Border Color"
+                              value={borderColor}
+                              onChange={handleBorderColorChange}
+                              onCopy={copyToClipboard}
+                            />
+                          </div>
+                        )}
+
+                        {activeNodeTab === "details" && (
+                          <div className="nodeTabPanel">
+                            <div className="nodeDetailsHeader glass">
+                              <div>
+                                <div className="nodeDetailsTitle">
+                                  {nodeCreators[selectedNode.creator]?.username || "Unknown Creator"}
+                                </div>
+                                <div className="nodeDetailsMeta">
+                                  Created: {new Date(selectedNode.creationTimestamp).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <img
+                                src={nodeCreators[selectedNode.creator]?.profile_picture || DEFAULT_AVATAR_URL}
+                                alt="Creator Avatar"
+                                className="nodeDetailsAvatar"
+                                onError={handleAvatarError}
+                              />
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Type</label>
+                              <select
+                                className="me-input"
+                                value={selectedNodeType}
+                                onChange={handleNodeTypeChange}
+                              >
+                                {NODE_TYPE_OPTIONS.map((type) => (
+                                  <option key={type} value={type}>
+                                    {type}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Tags</label>
+                              <div className="tagInputRow">
+                                <input
+                                  type="text"
+                                  className="me-input"
+                                  placeholder="Add a tag and press Enter"
+                                  value={tagInput}
+                                  onChange={(e) => setTagInput(e.target.value)}
+                                  onKeyDown={handleTagInputKeyDown}
+                                />
+                                <button
+                                  type="button"
+                                  className="tagAddButton"
+                                  onClick={handleAddTag}
+                                  disabled={!tagInput.trim()}
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="tagList">
+                                {selectedNodeTags.length === 0 ? (
+                                  <div className="me-meta">No tags yet.</div>
+                                ) : (
+                                  selectedNodeTags.map((tag) => (
+                                    <div key={tag} className="tagChip">
+                                      <button
+                                        type="button"
+                                        className="tagChipLabel"
+                                        onClick={() => setActiveTagFilter(tag)}
+                                        title="Filter by this tag"
+                                      >
+                                        {tag}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="tagChipRemove"
+                                        onClick={() => handleRemoveTag(tag)}
+                                        aria-label={`Remove tag ${tag}`}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Backlinks</label>
+                              {backlinkItems.length === 0 ? (
+                                <div className="me-meta">No connected nodes yet.</div>
+                              ) : (
+                                <div className="backlinksList">
+                                  {backlinkItems.map((item) => (
+                                    <button
+                                      key={item.id}
+                                      type="button"
+                                      className="backlinkItem"
+                                      onClick={() => selectNodeById(item.id, { center: true })}
+                                    >
+                                      <span className="backlinkTitle">
+                                        {item.title || `Node ${item.id}`}
+                                      </span>
+                                      <span
+                                        className={`backlinkDirection is-${item.direction.toLowerCase()}`}
+                                      >
+                                        {item.direction}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Node Name</label>
+                              <div className="me-chip">{getNodeTitle(selectedNode)}</div>
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Node ID</label>
+                              <div className="inlineRow">
+                                <div className="me-chip">{selectedNode.id}</div>
+                                <button
+                                  type="button"
+                                  className="copyButton"
+                                  onClick={() => copyToClipboard(selectedNode.id)}
+                                  aria-label="Copy Node ID"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Created</label>
+                              <div className="me-chip">
+                                {new Date(selectedNode.creationTimestamp).toLocaleString()}
+                              </div>
+                            </div>
+
+                            <div className="me-field">
+                              <label className="me-label">Creator ID</label>
+                              <div className="me-chip">{selectedNode.creator || "Unknown"}</div>
                             </div>
                           </div>
-                          <img
-                            src={nodeCreators[selectedNode.creator]?.profile_picture || DEFAULT_AVATAR_URL}
-                            alt="Creator Avatar"
-                            className="nodeDetailsAvatar"
-                            onError={handleAvatarError}
-                          />
-                        </div>
-
-                        <div className="me-field">
-                          <label className="me-label">Node Name:</label>
-                          <div className="me-chip">{getNodeTitle(selectedNode)}</div>
-                        </div>
-
-                        <div className="me-field">
-                          <label className="me-label">Creation Date:</label>
-                          <div className="me-chip">{new Date(selectedNode.creationTimestamp).toLocaleString()}</div>
-                        </div>
-
-                        <div className="me-field">
-                          <label className="me-label">Border Color:</label>
-                          <input
-                            type="color"
-                            value={borderColor}
-                            onChange={(e) => handleBorderColorChange(e.target.value)}
-                            className="me-color"
-                          />
-                        </div>
-
-                        <div className="me-field">
-                          <label className="me-label">Notes:</label>
-                          <textarea
-                            ref={noteInputRef}
-                            value={nodeNotes[selectedNode.id] || ""}
-                            onChange={handleNoteChange}
-                            onBlur={handleNoteBlur}
-                            placeholder="Add a note for this node"
-                            className="me-textarea"
-                            style={{ height: 60 }}
-                          />
-                        </div>
-
-                        <div className="me-field">
-                          <label className="me-label">Link:</label>
-                          <input
-                            type="text"
-                            value={nodeData[selectedNode.id]?.link || ""}
-                            onChange={(e) => handleLinkChange(e.target.value)}
-                            onBlur={() => updateMapRow(nodes, edges)}
-                            placeholder="Add a link"
-                            className="me-input"
-                          />
-                          {nodeData[selectedNode.id]?.link && (
-                            <div style={{ marginTop: 15 }}>
-                              <label className="me-label">View Link:</label>
-                              <a
-                                href={nodeData[selectedNode.id].link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "block",
-                                  marginTop: "10px",
-                                  color: "var(--map-accent)",
-                                  textDecoration: "underline",
-                                  wordBreak: "break-word",
-                                  fontSize: "1rem",
-                                }}
-                              >
-                                {nodeData[selectedNode.id].link}
-                              </a>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1629,8 +3161,13 @@ const MapEditor = ({ mapId }) => {
                     <div className="sidebarPanel glass" ref={edgeDetailsPanelRef}>
                       <div className="sidebarPanelHeader">
                         <h3>Edge Details</h3>
-                        <button onClick={() => setActiveSidebarPanel("settings")} className="btn-close">
-                          Close
+                        <button
+                          type="button"
+                          onClick={() => setActiveSidebarPanel("settings")}
+                          className="panelCloseButton"
+                          aria-label="Close edge details"
+                        >
+                          X
                         </button>
                       </div>
                       <div className="sidebarPanelBody">
@@ -1748,6 +3285,59 @@ const MapEditor = ({ mapId }) => {
               )}
         </div>
           </div>
+          {commandPaletteOpen && (
+            <div className="commandPaletteOverlay" onClick={() => setCommandPaletteOpen(false)}>
+              <div
+                className="commandPalette glass"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Command palette"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  ref={commandInputRef}
+                  type="text"
+                  className="commandPaletteInput"
+                  placeholder="Search nodes..."
+                  value={commandQuery}
+                  onChange={(e) => setCommandQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setCommandPaletteOpen(false);
+                      setCommandQuery("");
+                    }
+                  }}
+                />
+                <div className="commandPaletteResults">
+                  {normalizedCommandQuery && paletteResults.length === 0 && (
+                    <div className="commandPaletteEmpty">No matches.</div>
+                  )}
+                  {!normalizedCommandQuery && (
+                    <div className="commandPaletteEmpty">Type to search by title or text.</div>
+                  )}
+                  {paletteResults.map((result) => (
+                    <button
+                      key={result.node.id}
+                      type="button"
+                      className="commandPaletteResult"
+                      onClick={() => {
+                        selectNodeById(result.node.id, { center: true });
+                        setCommandPaletteOpen(false);
+                        setCommandQuery("");
+                      }}
+                    >
+                      <div className="commandPaletteResultTitle">
+                        {result.title || `Node ${result.node.id}`}
+                      </div>
+                      {result.snippet && (
+                        <div className="commandPaletteResultSnippet">{result.snippet}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
       </div>
     </div>
   );
