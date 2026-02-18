@@ -582,6 +582,7 @@ const MapEditor = ({ mapId }) => {
   const [mapDescription, setMapDescription] = useState("");
   const [lastEdited, setLastEdited] = useState("");
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapOwnerId, setMapOwnerId] = useState(null);
 
   // Node/edge UI helpers
   const [selectedElements, setSelectedElements] = useState([]);
@@ -625,12 +626,13 @@ const MapEditor = ({ mapId }) => {
 
   // Node creators (profiles)
   const [nodeCreators, setNodeCreators] = useState({}); // { uid: profile }
-  const [participants, setParticipants] = useState([]); // [{id, username, profile_picture, online}]
+  const [participants, setParticipants] = useState([]); // [{id, username, profile_picture, online, role, isAdmin}]
   const [cursors, setCursors] = useState({}); // { userId: { x, y, username, color } }
 
   // Realtime presence roster (live)
   const [presenceUsers, setPresenceUsers] = useState({}); // { userId: { userId, username, color } }
   const realtimeChannelRef = useRef(null);                // <-- NEW
+  const mapOwnerIdRef = useRef(null);
 
   // Refs to avoid noisy updates
   const prevMapRef = useRef(null);
@@ -1696,14 +1698,79 @@ const MapEditor = ({ mapId }) => {
   // ----- Load map + subscribe (durable data via Postgres; presence/cursors via Realtime) -----
   useEffect(() => {
     let mounted = true;
+    let channel;
+    let presenceTimer;
+
+    const refreshPresence = async () => {
+      const { data: presence } = await supabase
+        .from("map_presence")
+        .select("user_id, online")
+        .eq("map_id", mapId);
+
+      const onlineMap = {};
+      (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
+
+      setParticipants((prev) =>
+        prev.map((p) => ({
+          ...p,
+          online: !!onlineMap[p.id],
+        }))
+      );
+    };
+
+    const refreshParticipants = async () => {
+      const { data: parts } = await supabase
+        .from("map_participants")
+        .select("user_id, role")
+        .eq("map_id", mapId);
+      const ids = (parts || []).map((p) => p.user_id);
+      if (!ids.length) {
+        setParticipants([]);
+        return;
+      }
+
+      const roleMap = {};
+      (parts || []).forEach((p) => {
+        roleMap[p.user_id] = p.role;
+      });
+
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, username, profile_picture")
+        .in("id", ids);
+
+      // presence via map_presence view (still okay as a fallback)
+      const { data: presence } = await supabase
+        .from("map_presence")
+        .select("user_id, online")
+        .eq("map_id", mapId);
+
+      const onlineMap = {};
+      (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
+
+      const ownerId = mapOwnerIdRef.current;
+      const list = (profs || []).map((p) => {
+        const role = roleMap[p.id] || "member";
+        const isAdmin = p.id === ownerId || role === "admin" || role === "owner";
+        return {
+          id: p.id,
+          username: p.username || "Unknown",
+          profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
+          role,
+          isAdmin,
+          online: !!onlineMap[p.id],
+        };
+      });
+      setParticipants(list);
+    };
 
     const load = async () => {
       const { data: u } = await supabase.auth.getUser();
-      setCurrentUser(u?.user || null);
+      if (mounted) setCurrentUser(u?.user || null);
 
       const { data: m, error } = await supabase
         .from("maps")
-        .select("id, name, description, nodes, edges, node_notes, node_data, last_edited")
+        .select("id, name, description, nodes, edges, node_notes, node_data, last_edited, owner_id")
         .eq("id", mapId)
         .single();
       if (error) {
@@ -1725,6 +1792,8 @@ const MapEditor = ({ mapId }) => {
       setLastEdited(m?.last_edited ? new Date(m.last_edited).toLocaleString() : "Not available");
       setMapLoaded(true);
       prevMapRef.current = m;
+      mapOwnerIdRef.current = m?.owner_id || null;
+      setMapOwnerId(m?.owner_id || null);
 
       const creatorIds = Array.from(
         new Set(loadedNodes.map((n) => n.creator).filter((c) => !!c && c !== "unknown"))
@@ -1740,9 +1809,10 @@ const MapEditor = ({ mapId }) => {
       }
 
       await refreshParticipants();
+      presenceTimer = setInterval(refreshPresence, 15000);
 
       // Subscribe to map row updates for live real time changes.
-      const channel = supabase
+      channel = supabase
         .channel("map-" + mapId)
         .on(
           "postgres_changes",
@@ -1770,75 +1840,95 @@ const MapEditor = ({ mapId }) => {
           { event: "*", schema: "public", table: "map_participants", filter: `map_id=eq.${mapId}` },
           () => refreshParticipants()
         )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "map_cursors", filter: `map_id=eq.${mapId}` },
+          () => refreshPresence()
+        )
         .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    };
-
-    const refreshParticipants = async () => {
-      const { data: parts } = await supabase
-        .from("map_participants")
-        .select("user_id")
-        .eq("map_id", mapId);
-      const ids = (parts || []).map((p) => p.user_id);
-      if (!ids.length) {
-        setParticipants([]);
-        return;
-      }
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, username, profile_picture")
-        .in("id", ids);
-
-      // presence via map_presence view (still okay as a fallback)
-      const { data: presence } = await supabase
-        .from("map_presence")
-        .select("user_id, online")
-        .eq("map_id", mapId);
-
-      const onlineMap = {};
-      (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
-
-      const list = (profs || []).map((p) => ({
-        id: p.id,
-        username: p.username || "Unknown",
-        profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
-        online: !!onlineMap[p.id],
-      }));
-      setParticipants(list);
     };
 
     load();
 
     return () => {
       mounted = false;
+      if (channel) supabase.removeChannel(channel);
+      if (presenceTimer) clearInterval(presenceTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapId]);
+
+  // ----- Presence heartbeat (map_cursors) -----
+  useEffect(() => {
+    if (!currentUser || !mapLoaded) return;
+
+    let timer;
+
+    const writeHeartbeat = async () => {
+      try {
+        const username =
+          currentUser.user_metadata?.username ||
+          currentUser.email?.split("@")[0] ||
+          "Unknown User";
+        const color = colorFromId(currentUser.id);
+
+        const { error } = await supabase.from("map_cursors").upsert({
+          map_id: mapId,
+          user_id: currentUser.id,
+          x: 0,
+          y: 0,
+          username,
+          color,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) console.warn("cursor heartbeat error:", error.message);
+      } catch (err) {
+        console.warn("cursor heartbeat exception:", err);
+      }
+    };
+
+    writeHeartbeat();
+    timer = setInterval(writeHeartbeat, 12000);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [currentUser, mapLoaded, mapId]);
 
   // ----- Realtime presence + cursor broadcast (Phase C) -----
   useEffect(() => {
     if (!currentUser) return;
 
     // Build (or reuse) Realtime channel with presence
+    if (realtimeChannelRef.current) {
+      try {
+        supabase.removeChannel(realtimeChannelRef.current);
+      } catch {}
+      realtimeChannelRef.current = null;
+    }
+
     const chan = supabase.channel(`map:${mapId}`, {
       config: { presence: { key: currentUser.id } },
     });
 
-    // Presence roster sync
-    chan.on("presence", { event: "sync" }, () => {
+    const syncPresence = () => {
       const state = chan.presenceState();
       const next = {};
       Object.values(state).forEach((arr) => {
-        arr.forEach((m) => { next[m.userId] = m; });
+        arr.forEach((m) => {
+          if (m?.userId) next[m.userId] = m;
+        });
       });
       setPresenceUsers(next);
 
       // Reflect online in participants list immediately (optional)
       setParticipants((prev) => prev.map((p) => ({ ...p, online: !!next[p.id] })));
-    });
+    };
+
+    // Presence roster sync
+    chan.on("presence", { event: "sync" }, syncPresence);
+    chan.on("presence", { event: "join" }, syncPresence);
+    chan.on("presence", { event: "leave" }, syncPresence);
 
     // Receive cursor broadcasts
     chan.on("broadcast", { event: "cursor" }, ({ payload }) => {
@@ -1878,14 +1968,17 @@ const MapEditor = ({ mapId }) => {
     chan.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         await chan.track({ userId: currentUser.id, username: myUsername, color: myColor });
+        syncPresence();
       }
     });
 
     realtimeChannelRef.current = chan;
 
     return () => {
-      try { chan.unsubscribe(); } catch { }
+      try { chan.untrack(); } catch {}
+      try { supabase.removeChannel(chan); } catch {}
       realtimeChannelRef.current = null;
+      setPresenceUsers({});
     };
   }, [currentUser, mapId]);
 
@@ -1981,6 +2074,7 @@ const MapEditor = ({ mapId }) => {
   const isNodePanelActive = activeSidebarPanel === "node" && selectedNode;
   const isEdgePanelActive = activeSidebarPanel === "edge" && selectedEdge;
   const isSettingsPanelActive = !isNodePanelActive && !isEdgePanelActive;
+  const isAdmin = Boolean(currentUser?.id && mapOwnerId && currentUser.id === mapOwnerId);
   const selectedNodeBlocks = selectedNode ? getBlocksForNodeId(selectedNode.id) : [];
   const selectedNodeTags = selectedNode ? getNodeTags(selectedNode) : [];
   const selectedNodeType = selectedNode ? getNodeType(selectedNode) : NODE_TYPE_DEFAULT;
@@ -2536,8 +2630,10 @@ const MapEditor = ({ mapId }) => {
                             value={mapName}
                             onChange={(e) => setMapName(e.target.value)}
                             onBlur={() => updateMapRow(nodes, edges)}
+                            disabled={!isAdmin}
                             placeholder="Enter Learning Space name"
                             className="me-input"
+                            title={!isAdmin ? "Only admins can rename the map." : undefined}
                           />
                         </div>
 
@@ -2547,8 +2643,10 @@ const MapEditor = ({ mapId }) => {
                             value={mapDescription}
                             onChange={(e) => setMapDescription(e.target.value)}
                             onBlur={() => updateMapRow(nodes, edges)}
+                            disabled={!isAdmin}
                             placeholder="Enter Learning Space description"
                             className="me-textarea"
+                            title={!isAdmin ? "Only admins can edit the description." : undefined}
                           />
                         </div>
 
@@ -2592,14 +2690,21 @@ const MapEditor = ({ mapId }) => {
                                 />
                                 <div>
                                   <div className="participantName">
-                                    {p.username} {currentUser?.id === p.id ? "(Me)" : ""}
+                                    <span className="participantNameText">
+                                      {p.username} {currentUser?.id === p.id ? "(Me)" : ""}
+                                    </span>
+                                    <span
+                                      className={`participantRole ${p.isAdmin ? "admin" : "member"}`}
+                                    >
+                                      {p.isAdmin ? "Admin" : "Member"}
+                                    </span>
                                   </div>
                                   <div
                                     className={`participantStatus ${
-                                      presenceUsers[p.id] ? "online" : "offline"
+                                      (p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"
                                     }`}
                                   >
-                                    {presenceUsers[p.id] ? "online" : "offline"}
+                                    {(p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"}
                                   </div>
                                 </div>
                               </div>

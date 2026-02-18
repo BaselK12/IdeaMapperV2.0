@@ -453,6 +453,25 @@
   transform: translateX(2px)
 }
 
+.mc__menu-items>button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  background: transparent;
+}
+
+.mc__menu-items>button:disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+.mc__menu-items>button:disabled .mc__mi-ic svg,
+.mc__menu-items>button:disabled .mc__mi-text b,
+.mc__menu-items>button:disabled .mc__mi-text i,
+.mc__menu-items>button:disabled .mc__mi-arrow {
+  color: var(--muted-text, var(--muted));
+}
+
 .mc__mi-ic {
   width: 20px;
   height: 20px;

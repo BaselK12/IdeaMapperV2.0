@@ -619,6 +619,36 @@ const Dashboard = ({ theme, onToggleTheme }) => {
     }
   };
 
+  const handleLeaveMap = async (map) => {
+    if (!map?.id) return;
+    setError("");
+    try {
+      let me = currentUser;
+      if (!me) {
+        const { data } = await supabase.auth.getUser();
+        me = data?.user;
+      }
+      if (!me) throw new Error("You must be logged in.");
+      if (map.owner_id === me.id) {
+        alert("Admins cannot leave their own map. Delete it instead.");
+        return;
+      }
+
+      const { error: delErr } = await supabase
+        .from("map_participants")
+        .delete()
+        .eq("map_id", map.id)
+        .eq("user_id", me.id);
+      if (delErr) throw delErr;
+
+      setMaps((prev) => prev.filter((m) => m.id !== map.id));
+      setAllMaps((prev) => prev.filter((m) => m.id !== map.id));
+    } catch (err) {
+      console.error("leaveMap error:", err);
+      alert(err.message || "Failed to leave map.");
+    }
+  };
+
   // Save rename coming from MapCard popup
   const handleRename = async (map) => {
     if (!map?.id) return;
@@ -885,14 +915,16 @@ const Dashboard = ({ theme, onToggleTheme }) => {
       }
 
       // 2) idempotent participation (avoid duplicate PK)
-      const { error: upErr } = await supabase
+      const { error: joinErr } = await supabase
         .from("map_participants")
-        .upsert(
-          { map_id: id, user_id: me.id, role: "editor" },
-          { onConflict: "map_id,user_id", ignoreDuplicates: true }
-        );
-      if (upErr) {
-        console.error("Join map upsert error:", upErr);
+        .insert({ map_id: id, user_id: me.id, role: "member" });
+      if (joinErr) {
+        const msg = (joinErr.message || "").toLowerCase();
+        if (joinErr.code === "23505" || msg.includes("duplicate")) {
+          setJoinSuccessMessage("You are already a member of this map.");
+          return;
+        }
+        console.error("Join map insert error:", joinErr);
         setError("Couldn't join this map. Ask the owner to invite you.");
         return;
       }
@@ -913,6 +945,7 @@ const Dashboard = ({ theme, onToggleTheme }) => {
   const cancelJoinMap = () => {
     setJoinMapName("");
     setJoinMapId("");
+    setJoinSuccessMessage("");
     setIsJoinInputVisible(false);
   };
 
@@ -1168,7 +1201,7 @@ const Dashboard = ({ theme, onToggleTheme }) => {
               <div className="modal-content">
                 <div className="modal-header">
                   <h2>Join a map</h2>
-                  <button className="close-button" onClick={() => setIsJoinInputVisible(false)}>
+                  <button className="close-button" onClick={cancelJoinMap}>
                     &times;
                   </button>
                 </div>
@@ -1189,21 +1222,12 @@ const Dashboard = ({ theme, onToggleTheme }) => {
                     className="new-map-input"
                   />
 
-                  {joinSuccessMessage && (
-                    <div className="modal">
-                      <div className="modal-content">
-                        <p>{joinSuccessMessage}</p>
-                        <button className="close-button" onClick={() => setJoinSuccessMessage("")}>
-                          Close
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {joinSuccessMessage && <p className="success-text">{joinSuccessMessage}</p>}
                   {error && <p className="error-text">{error}</p>}
 
                   <div className="modal-buttons">
                     <button type="submit" className="create-map-button">Join Map</button>
-                    <button type="button" onClick={() => setIsJoinInputVisible(false)} className="card-button">
+                    <button type="button" onClick={cancelJoinMap} className="card-button">
                       Cancel
                     </button>
                   </div>
@@ -1283,6 +1307,8 @@ const Dashboard = ({ theme, onToggleTheme }) => {
                     onEditDescription={handleEditDescription}
                     onDuplicate={(map) => handleDuplicate(map)}
                     onDelete={(map) => handleDeleteClick(map.id, map.name)}
+                    onLeave={handleLeaveMap}
+                    isAdmin={currentUser?.id === m.owner_id}
                   />
                 ))
               )}

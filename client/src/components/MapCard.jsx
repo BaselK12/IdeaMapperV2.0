@@ -10,6 +10,8 @@ export default function MapCard({
   onEditDescription,
   onDuplicate,
   onDelete,
+  onLeave,
+  isAdmin = false,
 }) {
   const [openMenu, setOpenMenu] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -94,12 +96,14 @@ export default function MapCard({
 
   // Modal handlers
   const openRenameModal = () => {
+    if (!isAdmin) return;
     setOpenMenu(false);
     setTempValue(map?.name || "");
     setShowRename(true);
   };
 
   const openEditDescModal = () => {
+    if (!isAdmin) return;
     setOpenMenu(false);
     setTempValue(map?.description || "");
     setShowEditDesc(true);
@@ -229,7 +233,13 @@ export default function MapCard({
           </div>
 
           <div className="mc__menu-items">
-            <button role="menuitem" onClick={openRenameModal}>
+            <button
+              role="menuitem"
+              onClick={openRenameModal}
+              disabled={!isAdmin}
+              aria-disabled={!isAdmin}
+              title={!isAdmin ? "Only admins can rename maps." : undefined}
+            >
               <span className="mc__mi-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -243,7 +253,13 @@ export default function MapCard({
               <span className="mc__mi-arrow">→</span>
             </button>
 
-            <button role="menuitem" onClick={openEditDescModal}>
+            <button
+              role="menuitem"
+              onClick={openEditDescModal}
+              disabled={!isAdmin}
+              aria-disabled={!isAdmin}
+              title={!isAdmin ? "Only admins can edit descriptions." : undefined}
+            >
               <span className="mc__mi-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -272,18 +288,49 @@ export default function MapCard({
 
             <div className="mc__menu-div"></div>
 
-            <button className="is-danger" role="menuitem" onClick={() => { setOpenMenu(false); onDelete?.(map); }}>
-              <span className="mc__mi-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </span>
-              <span className="mc__mi-text">
-                <b>Delete Map</b>
-                <i>Remove permanently</i>
-              </span>
-              <span className="mc__mi-arrow">⌫</span>
-            </button>
+            {isAdmin ? (
+              <button
+                className="is-danger"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenu(false);
+                  onDelete?.(map);
+                }}
+              >
+                <span className="mc__mi-ic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </span>
+                <span className="mc__mi-text">
+                  <b>Delete Map</b>
+                  <i>Remove permanently</i>
+                </span>
+                <span className="mc__mi-arrow">⌫</span>
+              </button>
+            ) : (
+              <button
+                className="is-danger"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenu(false);
+                  onLeave?.(map);
+                }}
+              >
+                <span className="mc__mi-ic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                </span>
+                <span className="mc__mi-text">
+                  <b>Leave Map</b>
+                  <i>Remove yourself from this map</i>
+                </span>
+                <span className="mc__mi-arrow">↩</span>
+              </button>
+            )}
           </div>
 
           <div className="mc__menu-f">ID: {map?.id?.slice(0, 8) || "N/A"}</div>

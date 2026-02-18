@@ -1810,6 +1810,43 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 .mapView .participantName {
   color: var(--map-text);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mapView .participantNameText {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mapView .participantRole {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+  background: rgba(148,163,184,0.16);
+  color: #64748b;
+}
+
+.mapView .participantRole.admin {
+  background: rgba(59,130,246,0.18);
+  border-color: rgba(59,130,246,0.35);
+  color: #2563eb;
+}
+
+.mapView .participantRole.member {
+  background: rgba(148,163,184,0.16);
+  border-color: rgba(148,163,184,0.35);
+  color: #64748b;
 }
 
 .mapView .participantStatus {
