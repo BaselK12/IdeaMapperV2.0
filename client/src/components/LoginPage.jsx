@@ -99,7 +99,6 @@ const LoginPage = ({ onLogin }) => {
         email,
         password,
         options: {
-          emailRedirectTo: window.location.origin, // regular sign-up confirmation
           data: { username: cleanUsername },
         },
       });
@@ -122,7 +121,7 @@ const LoginPage = ({ onLogin }) => {
         return;
       }
 
-      alert("Account created. Please check your inbox to confirm your email, then log in.");
+      alert("Account created. You can now log in.");
       setIsLogin(true);
     } catch (err) {
       console.error("Signup error:", err);
