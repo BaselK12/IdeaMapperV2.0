@@ -88,7 +88,10 @@ export default function Sidebar({
                         <div className="sb__profile-email">{user?.email || ""}</div>
                     </div>
                 </button>
-
+                <button type="button" className="sb__signout" onClick={onSignOut}>
+                    <span className="sb__icon" aria-hidden="true">🚪</span>
+                    <span className="sb__signout-label">Sign out</span>
+                </button>
             </div>
         </aside>
     );

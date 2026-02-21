@@ -1082,14 +1082,6 @@ const Dashboard = ({ theme, onToggleTheme }) => {
                     >
                       User details
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="user-menu__item is-danger"
-                      onClick={() => { setUserMenuOpen(false); handleLogout(); }}
-                    >
-                      Sign out
-                    </button>
                   </div>
                 )}
               </div>
