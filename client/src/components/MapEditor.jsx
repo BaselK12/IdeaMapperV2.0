@@ -129,12 +129,6 @@ const hslToRgb = (h, s, l) => {
   };
 };
 
-const toRgba = (hex, alpha) => {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return "";
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-};
-
 const deriveAccentColor = (hex) => {
   const rgb = hexToRgb(hex);
   if (!rgb) return "#23c6f7";
@@ -2389,18 +2383,10 @@ const MapEditor = ({ mapId, onHome }) => {
       })()
     : [];
   const accentColor = deriveAccentColor(bgColor);
-  const glassTint = toRgba(bgPageColor, 0.14) || "rgba(255,255,255,0.12)";
-  const glassBorder = toRgba(bgColor, 0.32) || "rgba(255,255,255,0.3)";
-  const glassBorderSoft = toRgba(bgColor, 0.2) || "rgba(255,255,255,0.22)";
-  const accentSoft = toRgba(accentColor, 0.28) || "rgba(35,198,247,0.28)";
   const mapStyleVars = {
     "--map-page-bg": bgPageColor,
     "--map-grid": bgColor,
     "--map-accent": accentColor,
-    "--map-accent-soft": accentSoft,
-    "--glass-tint": glassTint,
-    "--glass-border": glassBorder,
-    "--glass-border-soft": glassBorderSoft,
   };
 
   if (accessNotice) {
