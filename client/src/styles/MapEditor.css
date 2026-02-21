@@ -663,7 +663,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 /* ===== Map view glassmorphism (mapView only) ===== */
 .mapView {
   --glass-base: var(--ui-panel, #ffffff);
-  --glass-tint: transparent;
+  --glass-tint: rgba(148, 163, 184, 0.08);
   --glass-border: var(--ui-border, #e2e8f0);
   --glass-border-soft: var(--ui-border, #e2e8f0);
   --glass-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
@@ -671,6 +671,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   --glass-radius: 20px;
   --glass-blur: 20px;
   --map-accent: #23c6f7;
+  --map-accent-soft: rgba(35, 198, 247, 0.24);
   --map-text: var(--ui-fg, #0f172a);
   --map-muted: var(--ui-muted, #64748b);
   --map-helper: var(--ui-muted, #64748b);
@@ -678,6 +679,14 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   min-height: 100vh;
   color: var(--map-text);
   background: var(--map-page-bg, #f7fbff);
+}
+
+@supports (color: color-mix(in srgb, #000 50%, #fff)) {
+  .mapView {
+    --map-accent-soft: color-mix(in srgb, var(--map-accent) 24%, transparent);
+    --glass-tint: color-mix(in srgb, var(--ui-panel, #ffffff) 88%, transparent);
+    --glass-border-soft: color-mix(in srgb, var(--ui-border, #e2e8f0) 72%, transparent);
+  }
 }
 
 .mapView .permissionNotice {
