@@ -1,5 +1,6 @@
 // MapEditor.jsx
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import ReactFlow, {
   addEdge,
   applyNodeChanges,
@@ -579,11 +580,12 @@ const colorFromId = (userId) => {
   return palette[h % palette.length];
 };
 
-const MapEditor = ({ mapId }) => {
+const MapEditor = ({ mapId, onHome }) => {
   // React Flow
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const rf = useReactFlow();                             // <-- NEW: instance for transforms
+  const navigate = useNavigate();
 
   // Map metadata
   const [mapName, setMapName] = useState("");
@@ -2256,7 +2258,13 @@ const MapEditor = ({ mapId }) => {
 
 
   // ---- UI Handlers ----
-  const refreshPage = () => window.location.reload();
+  const handleHome = () => {
+    if (typeof onHome === "function") {
+      onHome();
+      return;
+    }
+    navigate("/", { replace: true });
+  };
 
   // Helper: flow -> screen (to render absolute cursor at correct spot)
   const flowToScreen = useCallback(
@@ -2596,7 +2604,7 @@ const MapEditor = ({ mapId }) => {
                         alwaysOpen
                       >
                         <div className="sidebarActions">
-                          <button onClick={refreshPage} className="btn-primary">
+                          <button onClick={handleHome} className="btn-primary">
                             Home Page
                           </button>
                         </div>
@@ -3715,9 +3723,9 @@ const MapEditor = ({ mapId }) => {
   );
 };
 
-const MapEditorWithParams = ({ mapId }) => (
+const MapEditorWithParams = ({ mapId, onHome }) => (
   <ReactFlowProvider>
-    <MapEditor mapId={mapId} />
+    <MapEditor mapId={mapId} onHome={onHome} />
   </ReactFlowProvider>
 );
 

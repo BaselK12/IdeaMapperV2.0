@@ -963,7 +963,12 @@ const Dashboard = ({ theme, onToggleTheme }) => {
   // ------------- render -------------
   if (selectedMapId) {
     // NOTE: MapEditor is not migrated yet; this will break until we convert it.
-    return <MapEditor mapId={selectedMapId} />;
+    return (
+      <MapEditor
+        mapId={selectedMapId}
+        onHome={() => setSelectedMapId(null)}
+      />
+    );
   }
 
   return (
