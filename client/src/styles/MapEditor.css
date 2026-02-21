@@ -20,7 +20,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 
 /* ===== Page / canvas ===== */
 .map-editor {
-  position:relative; min-height:100vh; width:100%;
+  position:relative; min-height:100vh; min-height:100dvh; width:100%;
   background:
     radial-gradient(1100px 520px at 50% -15%, rgba(14,165,233,.05), transparent 60%),
     #f7fafc;
@@ -28,7 +28,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   display:flex;
 }
 .me-canvas {
-  width:80%; height:100vh; position:relative;
+  width:80%; height:100vh; height:100dvh; position:relative;
 }
 
 /* ===== Top-left help panel (ReactFlow Panel) ===== */
@@ -47,7 +47,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 
 /* ===== Side panel (right) ===== */
 .me-sidepanel {
-  width:20%; height:100vh; position:absolute; right:0; top:0; z-index:5;
+  width:20%; height:100vh; height:100dvh; position:absolute; right:0; top:0; z-index:5;
   padding:12px; overflow-y:auto; box-sizing:border-box;
   background: rgba(255,255,255,.92);
   border-left: 1px solid rgba(226,232,240,.9);
@@ -677,6 +677,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   --map-helper: var(--ui-muted, #64748b);
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   color: var(--map-text);
   background: var(--map-page-bg, #f7fbff);
 }
@@ -927,12 +928,14 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
 .mapView {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .mapView .mapStage {
   position: relative;
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   background: var(--map-page-bg, #f7fbff);
   overflow: hidden;
 }
@@ -1011,6 +1014,7 @@ MapEditor.css — harmonized with Login.css + Dashboard.css
   bottom: auto;
   height: auto;
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   overflow: hidden;
 }
 

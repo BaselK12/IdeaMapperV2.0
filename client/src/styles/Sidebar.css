@@ -1,6 +1,7 @@
 .sb.sb--fixed {
   inset: 0 auto 0 0;
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   z-index: 20;
 }
@@ -238,6 +239,7 @@
     inset: 0;
     width: 100vw;
     max-width: 100vw;
+    height: 100vh;
     height: 100dvh;
     padding: 20px 18px 24px;
     overflow-x: hidden;
@@ -297,6 +299,7 @@
     inset: 0;
     width: 100vw;
     max-width: 100vw;
+    height: 100vh;
     height: 100dvh;
     padding: 20px 18px 24px;
     overflow-x: hidden;
