@@ -14,6 +14,12 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { supabase } from "../supabaseClient";
+import {
+  canEdit as canEditPermission,
+  canView as canViewPermission,
+  isAdmin as isAdminPermission,
+  normalizeRole,
+} from "../permissions";
 import "../styles/MapEditor.css";
 
 const DEFAULT_AVATAR_URL = "/genericpp.png";
@@ -371,7 +377,7 @@ const pickPrimaryLinkFromBlocks = (blocks) => {
   return "";
 };
 
-const ColorControl = ({ id, label, value, onChange, onCopy, pickerTitle }) => {
+const ColorControl = ({ id, label, value, onChange, onCopy, pickerTitle, disabled = false }) => {
   const [hexValue, setHexValue] = useState(value);
 
   useEffect(() => {
@@ -410,6 +416,7 @@ const ColorControl = ({ id, label, value, onChange, onCopy, pickerTitle }) => {
           onChange={(event) => onChange(event.target.value)}
           title={pickerTitle}
           aria-label={`${label} picker`}
+          disabled={disabled}
         />
         <input
           type="text"
@@ -419,8 +426,9 @@ const ColorControl = ({ id, label, value, onChange, onCopy, pickerTitle }) => {
           onBlur={handleHexBlur}
           spellCheck={false}
           aria-label={`${label} hex value`}
+          disabled={disabled}
         />
-        <button type="button" className="colorCopyButton" onClick={() => onCopy(value)}>
+        <button type="button" className="colorCopyButton" onClick={() => onCopy(value)} disabled={disabled}>
           Copy
         </button>
       </div>
@@ -638,9 +646,14 @@ const MapEditor = ({ mapId }) => {
   const prevMapRef = useRef(null);
   const lastCursorSentRef = useRef(0);
   const pendingNodeMigrationRef = useRef(null);
+  const permissionNoticeTimerRef = useRef(null);
 
   // Current user
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+  const [permissionNotice, setPermissionNotice] = useState("");
+  const [accessNotice, setAccessNotice] = useState("");
+  const [memberActionId, setMemberActionId] = useState(null);
 
   // === Background chooser (per-user) ===
   const [bgStyle, setBgStyle] = useState(() => {
@@ -730,10 +743,43 @@ const MapEditor = ({ mapId }) => {
     return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
   };
 
+  const permissionMap = { owner_id: mapOwnerId };
+  const permissionUser = { id: currentUser?.id, role: currentUserRole };
+  const canViewMap = canViewPermission(permissionMap, permissionUser);
+  const canEditMap = canEditPermission(permissionMap, permissionUser);
+  const isAdmin = isAdminPermission(permissionMap, permissionUser);
+  const isReadOnly = !canEditMap;
+
+  const showPermissionNotice = useCallback((message) => {
+    if (!message) return;
+    setPermissionNotice(message);
+    if (permissionNoticeTimerRef.current) {
+      clearTimeout(permissionNoticeTimerRef.current);
+    }
+    permissionNoticeTimerRef.current = setTimeout(() => {
+      setPermissionNotice("");
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (permissionNoticeTimerRef.current) {
+        clearTimeout(permissionNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const requireEditPermission = useCallback(() => {
+    if (canEditMap) return true;
+    showPermissionNotice(canViewMap ? "This map is view-only." : "Access removed.");
+    return false;
+  }, [canEditMap, canViewMap, showPermissionNotice]);
+
 
   const updateMapRow = useCallback(
     async (newNodes, newEdges, nextNodeNotes = nodeNotes, nextNodeData = nodeData) => {
       if (!mapLoaded) return;
+      if (!canEditMap) return;
       try {
         const filteredNodes = (newNodes || []).map((n) => removeUndefined(n));
         const filteredEdges = (newEdges || []).map((e) =>
@@ -751,12 +797,19 @@ const MapEditor = ({ mapId }) => {
         });
 
         const { error } = await supabase.from("maps").update(payload).eq("id", mapId);
-        if (error) console.error("❌ Update map failed:", error);
+        if (error) {
+          console.error("❌ Update map failed:", error);
+          const msg = (error.message || "").toLowerCase();
+          if (error.code === "42501" || msg.includes("permission")) {
+            setAccessNotice("Access removed.");
+            showPermissionNotice("Access removed.");
+          }
+        }
       } catch (err) {
         console.error("❌ Unexpected updateMapRow error:", err);
       }
     },
-    [mapLoaded, mapId, mapName, mapDescription, nodeNotes, nodeData]
+    [mapLoaded, mapId, mapName, mapDescription, nodeNotes, nodeData, canEditMap, showPermissionNotice]
   );
 
   const applyNodeDataMigration = (nextNodes, nextEdges, nextNotes, nextData) => {
@@ -810,25 +863,29 @@ const MapEditor = ({ mapId }) => {
       if (editingNodeId) return;
       setNodes((nds) => {
         const updated = applyNodeChanges(changes, nds);
-        clearTimeout(saveTimeout.current);
-        saveTimeout.current = setTimeout(() => {
-          updateMapRow(updated, edges);
-        }, 300);
+        if (canEditMap) {
+          clearTimeout(saveTimeout.current);
+          saveTimeout.current = setTimeout(() => {
+            updateMapRow(updated, edges);
+          }, 300);
+        }
         return updated;
       });
     },
-    [edges, updateMapRow, editingNodeId, setNodes]
+    [edges, updateMapRow, editingNodeId, setNodes, canEditMap]
   );
 
   const handleEdgeChanges = useCallback(
     (changes) => {
       setEdges((eds) => {
         const updated = applyEdgeChanges(changes, eds);
-        updateMapRow(nodes, updated);
+        if (canEditMap) {
+          updateMapRow(nodes, updated);
+        }
         return updated;
       });
     },
-    [nodes, updateMapRow, setEdges]
+    [nodes, updateMapRow, setEdges, canEditMap]
   );
 
 
@@ -855,6 +912,7 @@ const MapEditor = ({ mapId }) => {
   }, [currentUser]);
 
   const handleNodeDragStop = useCallback(() => {
+    if (!canEditMap) return;
     // Debounced persist: write final positions once user stops dragging
     clearTimeout(dragSaveTimeoutRef.current);
     dragSaveTimeoutRef.current = setTimeout(() => {
@@ -863,12 +921,13 @@ const MapEditor = ({ mapId }) => {
         return curr;
       });
     }, 250);
-  }, [edges, setNodes, updateMapRow]);
+  }, [edges, setNodes, updateMapRow, canEditMap]);
 
   // Until here -- added live node-drag broadcasting
 
   const onConnect = useCallback(
     (params) => {
+      if (!requireEditPermission()) return;
       const modal = document.createElement("div");
       modal.style.position = "fixed";
       modal.style.top = "50%";
@@ -942,16 +1001,20 @@ const MapEditor = ({ mapId }) => {
 
       document.body.appendChild(modal);
     },
-    [nodes, updateMapRow, setEdges]
+    [nodes, updateMapRow, setEdges, requireEditPermission]
   );
 
-  const onContextMenu = useCallback((event) => {
-    event.preventDefault();
-    const bounds = reactFlowWrapper.current.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    setContextMenu({ x, y });
-  }, []);
+  const onContextMenu = useCallback(
+    (event) => {
+      if (!canEditMap) return;
+      event.preventDefault();
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      const x = event.clientX - bounds.left;
+      const y = event.clientY - bounds.top;
+      setContextMenu({ x, y });
+    },
+    [canEditMap]
+  );
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   useEffect(() => {
@@ -964,6 +1027,7 @@ const MapEditor = ({ mapId }) => {
 
   const addNode = useCallback(
     async (position = { x: Math.random() * 400, y: Math.random() * 400 }) => {
+      if (!requireEditPermission()) return;
       const maxId = nodes.length ? Math.max(...nodes.map((n) => parseInt(n.id))) : 0;
       const newNodeId = (maxId + 1).toString();
 
@@ -997,41 +1061,44 @@ const MapEditor = ({ mapId }) => {
         if (prof) setNodeCreators((prev) => ({ ...prev, [userId]: prof }));
       }
     },
-    [nodes, edges, updateMapRow, borderColor, currentUser, setNodes]
+    [nodes, edges, updateMapRow, borderColor, currentUser, setNodes, requireEditPermission]
   );
 
   // ----- Inline edit: buffered typing -----
   const onNodeDoubleClick = useCallback(
     (_, node) => {
+      if (!requireEditPermission()) return;
       setEditingNodeId(node.id);
       setPendingLabel(getNodeTitle(node));
       setNodes((nds) =>
         nds.map((n) => (n.id === node.id ? { ...n, data: { ...n.data, isEditing: true } } : n))
       );
     },
-    [setNodes]
+    [setNodes, requireEditPermission]
   );
 
   const handleLabelTyping = (e) => setPendingLabel(e.target.value);
 
   const commitLabel = useCallback(() => {
     if (!editingNodeId) return;
+    if (!requireEditPermission()) return;
     setNodes((nds) => {
       const updated = nds.map((n) => (n.id === editingNodeId ? setNodeTitle(n, pendingLabel) : n));
       updateMapRow(updated, edges);
       return updated;
     });
     setEditingNodeId(null);
-  }, [editingNodeId, pendingLabel, edges, updateMapRow, setNodes]);
+  }, [editingNodeId, pendingLabel, edges, updateMapRow, setNodes, requireEditPermission]);
 
   const onDelete = useCallback(() => {
+    if (!requireEditPermission()) return;
     const remainingNodes = nodes.filter((n) => !selectedElements.includes(n.id));
     const remainingEdges = edges.filter((e) => !selectedElements.includes(e.id));
     setNodes(remainingNodes);
     setEdges(remainingEdges);
     setSelectedElements([]);
     updateMapRow(remainingNodes, remainingEdges);
-  }, [nodes, edges, selectedElements, updateMapRow, setNodes, setEdges]);
+  }, [nodes, edges, selectedElements, updateMapRow, setNodes, setEdges, requireEditPermission]);
 
   const LOCAL_BG_PAGECOLOR_KEY = "mapEditor:bgPageColor";
 
@@ -1063,6 +1130,7 @@ const MapEditor = ({ mapId }) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (disableShortcuts || commandPaletteOpen) return;
+      if (!canEditMap) return;
       const a = document.activeElement;
       if (a?.tagName === "INPUT" || a?.tagName === "TEXTAREA" || a?.isContentEditable) return;
       if (event.key === "Delete" || event.key === "Backspace") onDelete();
@@ -1070,7 +1138,7 @@ const MapEditor = ({ mapId }) => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDelete, addNode, disableShortcuts, commandPaletteOpen]);
+  }, [onDelete, addNode, disableShortcuts, commandPaletteOpen, canEditMap]);
 
   useEffect(() => {
     const handlePaletteShortcut = (event) => {
@@ -1125,6 +1193,7 @@ const MapEditor = ({ mapId }) => {
   }, [selectedNode?.id]);
 
   const handleBorderColorChange = (color) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const updated = nodes.map((node) =>
       node.id === selectedNode.id ? { ...node, style: { ...node.style, border: `2px solid ${color}` } } : node
@@ -1140,6 +1209,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleApplyPreset = (presetId) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const preset = NODE_STYLE_PRESETS.find((item) => item.id === presetId);
     if (!preset) return;
@@ -1160,6 +1230,7 @@ const MapEditor = ({ mapId }) => {
 
   const updateNodeDataFields = useCallback(
     (nodeId, patch) => {
+      if (!requireEditPermission()) return;
       if (!nodeId) return;
       setNodes((nds) => {
         const updated = nds.map((node) =>
@@ -1173,10 +1244,11 @@ const MapEditor = ({ mapId }) => {
         return updated;
       });
     },
-    [edges, updateMapRow, setNodes, setSelectedNode]
+    [edges, updateMapRow, setNodes, setSelectedNode, requireEditPermission]
   );
 
   const handleNodeTypeChange = (event) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const nextType = event.target.value;
     if (!NODE_TYPE_OPTIONS.includes(nextType)) return;
@@ -1206,6 +1278,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleAddTag = () => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const incoming = splitTagInput(tagInput);
     if (!incoming.length) return;
@@ -1216,6 +1289,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleRemoveTag = (tagToRemove) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const existing = getNodeTags(selectedNode);
     const nextTags = existing.filter(
@@ -1236,6 +1310,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const updateBlocksForNode = (nodeId, nextBlocks, { persist = false } = {}) => {
+    if (!requireEditPermission()) return;
     const primaryText = pickPrimaryTextFromBlocks(nextBlocks);
     const primaryLink = pickPrimaryLinkFromBlocks(nextBlocks);
     const nextNodeData = {
@@ -1262,6 +1337,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const addBlockToNode = (nodeId, type) => {
+    if (!requireEditPermission()) return;
     if (!nodeId) return;
     const createdAt = new Date().toISOString();
     let newBlock = { id: makeBlockId(type), type, createdAt };
@@ -1273,11 +1349,13 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleAddBlock = (type) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     addBlockToNode(selectedNode.id, type);
   };
 
   const handleRemoveBlock = (blockId, blockIndex) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const nextBlocks = getBlocksForNodeId(selectedNode.id).filter((block, idx) => {
       if (block?.id) return block.id !== blockId;
@@ -1287,11 +1365,13 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleBlockFieldChange = (blockId, blockIndex, field, value) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     updateBlockForNode(selectedNode.id, blockId, blockIndex, { [field]: value });
   };
 
   const handleMoveBlock = (blockId, blockIndex, direction) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const blocks = [...getBlocksForNodeId(selectedNode.id)];
     if (!blocks.length) return;
@@ -1306,6 +1386,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleBlockFileSelection = (blockId, file, kind, resetInput) => {
+    if (!requireEditPermission()) return;
     if (!file) return;
     const validationError = getMediaValidationError(file, kind);
     if (validationError) {
@@ -1323,6 +1404,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleBlockUpload = async (blockId, blockIndex, kind) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const file = pendingUploadFiles?.[blockId];
     if (!file) {
@@ -1390,6 +1472,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleRemoveBlockMedia = async (blockId, blockIndex) => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     const blocks = getBlocksForNodeId(selectedNode.id);
     const target =
@@ -1419,11 +1502,13 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleBlockBlur = () => {
+    if (!requireEditPermission()) return;
     if (!selectedNode) return;
     updateMapRow(nodes, edges);
   };
 
   const handleDuplicateNode = (nodeId) => {
+    if (!requireEditPermission()) return;
     if (!nodeId) return;
     const sourceNode = nodes.find((node) => node.id === nodeId);
     if (!sourceNode) return;
@@ -1477,6 +1562,7 @@ const MapEditor = ({ mapId }) => {
   };
 
   const handleDeleteNodeById = (nodeId) => {
+    if (!requireEditPermission()) return;
     if (!nodeId) return;
     const remainingNodes = nodes.filter((node) => node.id !== nodeId);
     const remainingEdges = edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
@@ -1579,6 +1665,7 @@ const MapEditor = ({ mapId }) => {
               }
             }}
             autoFocus
+            readOnly={isReadOnly}
             className="me-node-input"
             style={{ width: "100%" }}
           />
@@ -1636,6 +1723,7 @@ const MapEditor = ({ mapId }) => {
               title="Add text block"
               aria-label="Add text block"
               onClick={() => addBlockToNode(node.id, "text")}
+              disabled={isReadOnly}
             >
               T
             </button>
@@ -1645,6 +1733,7 @@ const MapEditor = ({ mapId }) => {
               title="Add link block"
               aria-label="Add link block"
               onClick={() => addBlockToNode(node.id, "link")}
+              disabled={isReadOnly}
             >
               🔗
             </button>
@@ -1654,6 +1743,7 @@ const MapEditor = ({ mapId }) => {
               title="Add image block"
               aria-label="Add image block"
               onClick={() => addBlockToNode(node.id, "image")}
+              disabled={isReadOnly}
             >
               🖼️
             </button>
@@ -1663,6 +1753,7 @@ const MapEditor = ({ mapId }) => {
               title="Add video block"
               aria-label="Add video block"
               onClick={() => addBlockToNode(node.id, "video")}
+              disabled={isReadOnly}
             >
               🎥
             </button>
@@ -1672,6 +1763,7 @@ const MapEditor = ({ mapId }) => {
               title="Duplicate node"
               aria-label="Duplicate node"
               onClick={() => handleDuplicateNode(node.id)}
+              disabled={isReadOnly}
             >
               ⧉
             </button>
@@ -1681,6 +1773,7 @@ const MapEditor = ({ mapId }) => {
               title="Delete node"
               aria-label="Delete node"
               onClick={() => handleDeleteNodeById(node.id)}
+              disabled={isReadOnly}
             >
               ✕
             </button>
@@ -1695,6 +1788,145 @@ const MapEditor = ({ mapId }) => {
     );
   };
 
+  const refreshParticipants = useCallback(
+    async (currentUserIdOverride) => {
+      try {
+        const { data: parts, error: partsErr } = await supabase
+          .from("map_participants")
+          .select("user_id, role")
+          .eq("map_id", mapId);
+        if (partsErr) throw partsErr;
+
+        const ids = (parts || []).map((p) => p.user_id);
+        if (!ids.length) {
+          setParticipants([]);
+          setCurrentUserRole(null);
+          const meId = currentUserIdOverride || currentUser?.id;
+          const ownerId = mapOwnerIdRef.current;
+          if (meId && (!ownerId || ownerId !== meId)) {
+            setAccessNotice("Access removed.");
+          }
+          return;
+        }
+
+        const roleMap = {};
+        (parts || []).forEach((p) => {
+          const normalized = normalizeRole(p.role);
+          roleMap[p.user_id] = normalized || "viewer";
+        });
+
+        const { data: profs, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, username, profile_picture")
+          .in("id", ids);
+        if (profErr) throw profErr;
+
+        const { data: presence } = await supabase
+          .from("map_presence")
+          .select("user_id, online")
+          .eq("map_id", mapId);
+
+        const onlineMap = {};
+        (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
+
+        const ownerId = mapOwnerIdRef.current;
+        const list = (profs || []).map((p) => {
+          const role = roleMap[p.id] || (ownerId === p.id ? "admin" : "viewer");
+          const isAdmin = role === "admin" || ownerId === p.id;
+          return {
+            id: p.id,
+            username: p.username || "Unknown",
+            profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
+            role,
+            isAdmin,
+            online: !!onlineMap[p.id],
+          };
+        });
+        setParticipants(list);
+
+        const meId = currentUserIdOverride || currentUser?.id;
+        if (meId) {
+          const isOwner = ownerId && ownerId === meId;
+          const selfRole = isOwner ? "admin" : roleMap[meId] || null;
+          setCurrentUserRole(selfRole);
+          if (!isOwner && !roleMap[meId]) {
+            setAccessNotice("Access removed.");
+          }
+        }
+      } catch (err) {
+        console.error("refreshParticipants error:", err);
+      }
+    },
+    [mapId, currentUser?.id]
+  );
+
+  const handleMemberRoleChange = useCallback(
+    async (userId, nextRole) => {
+      if (!isAdmin) {
+        showPermissionNotice("Only admins can manage members.");
+        return;
+      }
+      if (!userId) return;
+      if (!["viewer", "editor"].includes(nextRole)) return;
+      setMemberActionId(userId);
+      const { error } = await supabase
+        .from("map_participants")
+        .update({ role: nextRole })
+        .eq("map_id", mapId)
+        .eq("user_id", userId);
+      if (error) {
+        console.error("Role update failed:", error);
+        showPermissionNotice("Couldn't update role.");
+      } else {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === userId ? { ...p, role: nextRole } : p))
+        );
+        if (userId === currentUser?.id) {
+          setCurrentUserRole(nextRole);
+        }
+      }
+      setMemberActionId(null);
+      await refreshParticipants(currentUser?.id);
+    },
+    [isAdmin, mapId, currentUser?.id, showPermissionNotice, refreshParticipants]
+  );
+
+  const handleRemoveParticipant = useCallback(
+    async (userId) => {
+      if (!isAdmin) {
+        showPermissionNotice("Only admins can manage members.");
+        return;
+      }
+      if (!userId) return;
+      if (userId === currentUser?.id) {
+        showPermissionNotice("Admins cannot remove themselves.");
+        return;
+      }
+      const target = participants.find((p) => p.id === userId);
+      if (target?.role === "admin") {
+        showPermissionNotice("Admins cannot be removed.");
+        return;
+      }
+      const confirmed = window.confirm("Remove this member from the map?");
+      if (!confirmed) return;
+      setMemberActionId(userId);
+      const { error } = await supabase
+        .from("map_participants")
+        .delete()
+        .eq("map_id", mapId)
+        .eq("user_id", userId);
+      if (error) {
+        console.error("Remove member failed:", error);
+        showPermissionNotice("Couldn't remove member.");
+      } else {
+        setParticipants((prev) => prev.filter((p) => p.id !== userId));
+      }
+      setMemberActionId(null);
+      await refreshParticipants(currentUser?.id);
+    },
+    [isAdmin, mapId, currentUser?.id, participants, showPermissionNotice, refreshParticipants]
+  );
+
   // ----- Load map + subscribe (durable data via Postgres; presence/cursors via Realtime) -----
   useEffect(() => {
     let mounted = true;
@@ -1702,10 +1934,17 @@ const MapEditor = ({ mapId }) => {
     let presenceTimer;
 
     const refreshPresence = async () => {
-      const { data: presence } = await supabase
+      const { data: presence, error: presenceErr } = await supabase
         .from("map_presence")
         .select("user_id, online")
         .eq("map_id", mapId);
+      if (presenceErr) {
+        const msg = (presenceErr.message || "").toLowerCase();
+        if (presenceErr.code === "42501" || msg.includes("permission")) {
+          setAccessNotice("Access removed.");
+        }
+        return;
+      }
 
       const onlineMap = {};
       (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
@@ -1716,52 +1955,6 @@ const MapEditor = ({ mapId }) => {
           online: !!onlineMap[p.id],
         }))
       );
-    };
-
-    const refreshParticipants = async () => {
-      const { data: parts } = await supabase
-        .from("map_participants")
-        .select("user_id, role")
-        .eq("map_id", mapId);
-      const ids = (parts || []).map((p) => p.user_id);
-      if (!ids.length) {
-        setParticipants([]);
-        return;
-      }
-
-      const roleMap = {};
-      (parts || []).forEach((p) => {
-        roleMap[p.user_id] = p.role;
-      });
-
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, username, profile_picture")
-        .in("id", ids);
-
-      // presence via map_presence view (still okay as a fallback)
-      const { data: presence } = await supabase
-        .from("map_presence")
-        .select("user_id, online")
-        .eq("map_id", mapId);
-
-      const onlineMap = {};
-      (presence || []).forEach((r) => (onlineMap[r.user_id] = r.online));
-
-      const ownerId = mapOwnerIdRef.current;
-      const list = (profs || []).map((p) => {
-        const role = roleMap[p.id] || "member";
-        const isAdmin = p.id === ownerId || role === "admin" || role === "owner";
-        return {
-          id: p.id,
-          username: p.username || "Unknown",
-          profile_picture: p.profile_picture || DEFAULT_AVATAR_URL,
-          role,
-          isAdmin,
-          online: !!onlineMap[p.id],
-        };
-      });
-      setParticipants(list);
     };
 
     const load = async () => {
@@ -1775,6 +1968,10 @@ const MapEditor = ({ mapId }) => {
         .single();
       if (error) {
         console.error("Failed to load map:", error.message);
+        const msg = (error.message || "").toLowerCase();
+        if (error.code === "PGRST116" || msg.includes("permission")) {
+          setAccessNotice("Access removed.");
+        }
         return;
       }
       if (!mounted) return;
@@ -1808,7 +2005,7 @@ const MapEditor = ({ mapId }) => {
         setNodeCreators(dict);
       }
 
-      await refreshParticipants();
+      await refreshParticipants(u?.user?.id);
       presenceTimer = setInterval(refreshPresence, 15000);
 
       // Subscribe to map row updates for live real time changes.
@@ -2074,7 +2271,6 @@ const MapEditor = ({ mapId }) => {
   const isNodePanelActive = activeSidebarPanel === "node" && selectedNode;
   const isEdgePanelActive = activeSidebarPanel === "edge" && selectedEdge;
   const isSettingsPanelActive = !isNodePanelActive && !isEdgePanelActive;
-  const isAdmin = Boolean(currentUser?.id && mapOwnerId && currentUser.id === mapOwnerId);
   const selectedNodeBlocks = selectedNode ? getBlocksForNodeId(selectedNode.id) : [];
   const selectedNodeTags = selectedNode ? getNodeTags(selectedNode) : [];
   const selectedNodeType = selectedNode ? getNodeType(selectedNode) : NODE_TYPE_DEFAULT;
@@ -2199,8 +2395,23 @@ const MapEditor = ({ mapId }) => {
     "--glass-border-soft": glassBorderSoft,
   };
 
+  if (accessNotice) {
+    return (
+      <div className="mapView" style={mapStyleVars}>
+        <div className="permissionNotice is-blocked" role="alert">
+          {accessNotice}
+        </div>
+      </div>
+    );
+  }
+
   return (
       <div className="mapView" style={mapStyleVars}>
+        {permissionNotice && (
+          <div className="permissionNotice" role="alert">
+            {permissionNotice}
+          </div>
+        )}
         <div ref={reactFlowWrapper} className="mapStage map-editor reactflowWrapper">
           <div className="mapCanvas">
             <ReactFlow
@@ -2209,6 +2420,9 @@ const MapEditor = ({ mapId }) => {
             defaultEdgeOptions={{
               style: { ...DEFAULT_EDGE_STYLE },
             }}
+            nodesDraggable={canEditMap}
+            nodesConnectable={canEditMap}
+            edgesUpdatable={canEditMap}
             onNodesChange={handleNodeChanges}
             onEdgesChange={handleEdgeChanges}
             onContextMenu={onContextMenu}
@@ -2630,10 +2844,10 @@ const MapEditor = ({ mapId }) => {
                             value={mapName}
                             onChange={(e) => setMapName(e.target.value)}
                             onBlur={() => updateMapRow(nodes, edges)}
-                            disabled={!isAdmin}
+                            disabled={!canEditMap}
                             placeholder="Enter Learning Space name"
                             className="me-input"
-                            title={!isAdmin ? "Only admins can rename the map." : undefined}
+                            title={!canEditMap ? "Only editors or admins can edit the map." : undefined}
                           />
                         </div>
 
@@ -2643,10 +2857,10 @@ const MapEditor = ({ mapId }) => {
                             value={mapDescription}
                             onChange={(e) => setMapDescription(e.target.value)}
                             onBlur={() => updateMapRow(nodes, edges)}
-                            disabled={!isAdmin}
+                            disabled={!canEditMap}
                             placeholder="Enter Learning Space description"
                             className="me-textarea"
-                            title={!isAdmin ? "Only admins can edit the description." : undefined}
+                            title={!canEditMap ? "Only editors or admins can edit the map." : undefined}
                           />
                         </div>
 
@@ -2679,37 +2893,68 @@ const MapEditor = ({ mapId }) => {
                         alwaysOpen
                       >
                         <ul className="participantList">
-                          {participants.map((p) => (
-                            <li key={p.id} className="participantRow">
-                              <div className="participantIdentity">
-                                <img
-                                  src={p.profile_picture || DEFAULT_AVATAR_URL}
-                                  alt={`${p.username}'s profile`}
-                                  className="participantAvatar"
-                                  onError={handleAvatarError}
-                                />
-                                <div>
-                                  <div className="participantName">
-                                    <span className="participantNameText">
-                                      {p.username} {currentUser?.id === p.id ? "(Me)" : ""}
-                                    </span>
-                                    <span
-                                      className={`participantRole ${p.isAdmin ? "admin" : "member"}`}
+                          {participants.map((p) => {
+                            const roleValue = p.role || "viewer";
+                            const roleLabel =
+                              roleValue === "admin" ? "Admin" : roleValue === "editor" ? "Editor" : "Viewer";
+                            const isSelf = currentUser?.id === p.id;
+                            const isRoleLocked = roleValue === "admin" || p.isAdmin;
+                            const canEditRole = isAdmin && !isRoleLocked;
+                            const canRemove = isAdmin && !isRoleLocked && !isSelf;
+                            const busy = memberActionId === p.id;
+                            return (
+                              <li key={p.id} className="participantRow">
+                                <div className="participantIdentity">
+                                  <img
+                                    src={p.profile_picture || DEFAULT_AVATAR_URL}
+                                    alt={`${p.username}'s profile`}
+                                    className="participantAvatar"
+                                    onError={handleAvatarError}
+                                  />
+                                  <div>
+                                    <div className="participantName">
+                                      <span className="participantNameText">
+                                        {p.username} {isSelf ? "(Me)" : ""}
+                                      </span>
+                                      {canEditRole ? (
+                                        <select
+                                          className="participantRoleSelect"
+                                          value={roleValue}
+                                          onChange={(e) =>
+                                            handleMemberRoleChange(p.id, e.target.value)
+                                          }
+                                          disabled={busy}
+                                          aria-label={`Set role for ${p.username}`}
+                                        >
+                                          <option value="viewer">viewer</option>
+                                          <option value="editor">editor</option>
+                                        </select>
+                                      ) : (
+                                        <span className={`participantRole ${roleValue}`}>{roleLabel}</span>
+                                      )}
+                                    </div>
+                                    <div
+                                      className={`participantStatus ${
+                                        (p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"
+                                      }`}
                                     >
-                                      {p.isAdmin ? "Admin" : "Member"}
-                                    </span>
-                                  </div>
-                                  <div
-                                    className={`participantStatus ${
-                                      (p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"
-                                    }`}
-                                  >
-                                    {(p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"}
+                                      {(p.online ?? !!presenceUsers[p.id]) ? "online" : "offline"}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </li>
-                          ))}
+                                {canRemove && (
+                                  <button
+                                    type="button"
+                                    className="participantRemoveButton"
+                                    onClick={() => handleRemoveParticipant(p.id)}
+                                    disabled={busy}
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       </SidebarSection>
 
@@ -2801,6 +3046,7 @@ const MapEditor = ({ mapId }) => {
                                 type="button"
                                 className="nodeBlockButton"
                                 onClick={() => handleAddBlock("text")}
+                                disabled={isReadOnly}
                               >
                                 Add Text
                               </button>
@@ -2808,6 +3054,7 @@ const MapEditor = ({ mapId }) => {
                                 type="button"
                                 className="nodeBlockButton"
                                 onClick={() => handleAddBlock("image")}
+                                disabled={isReadOnly}
                               >
                                 Add Image
                               </button>
@@ -2815,6 +3062,7 @@ const MapEditor = ({ mapId }) => {
                                 type="button"
                                 className="nodeBlockButton"
                                 onClick={() => handleAddBlock("video")}
+                                disabled={isReadOnly}
                               >
                                 Add Video
                               </button>
@@ -2822,6 +3070,7 @@ const MapEditor = ({ mapId }) => {
                                 type="button"
                                 className="nodeBlockButton"
                                 onClick={() => handleAddBlock("link")}
+                                disabled={isReadOnly}
                               >
                                 Add Link
                               </button>
@@ -2856,7 +3105,7 @@ const MapEditor = ({ mapId }) => {
                                             type="button"
                                             className="nodeBlockReorder"
                                             onClick={() => handleMoveBlock(blockKey, index, -1)}
-                                            disabled={isFirst}
+                                            disabled={isReadOnly || isFirst}
                                             title="Move up"
                                             aria-label="Move block up"
                                           >
@@ -2866,7 +3115,7 @@ const MapEditor = ({ mapId }) => {
                                             type="button"
                                             className="nodeBlockReorder"
                                             onClick={() => handleMoveBlock(blockKey, index, 1)}
-                                            disabled={isLast}
+                                            disabled={isReadOnly || isLast}
                                             title="Move down"
                                             aria-label="Move block down"
                                           >
@@ -2876,6 +3125,7 @@ const MapEditor = ({ mapId }) => {
                                             type="button"
                                             className="nodeBlockRemove"
                                             onClick={() => handleRemoveBlock(blockKey, index)}
+                                            disabled={isReadOnly}
                                           >
                                             Remove
                                           </button>
@@ -2894,6 +3144,7 @@ const MapEditor = ({ mapId }) => {
                                             placeholder="Write a note..."
                                             className="me-textarea"
                                             rows={3}
+                                            readOnly={isReadOnly}
                                           />
                                         </div>
                                       )}
@@ -2911,7 +3162,7 @@ const MapEditor = ({ mapId }) => {
                                               onBlur={handleBlockBlur}
                                               placeholder={`Add a ${block.type} URL`}
                                               className="me-input"
-                                              disabled={isUploading}
+                                              disabled={isReadOnly || isUploading}
                                             />
                                           </div>
                                           <div className="nodeBlockUploadRow">
@@ -2934,13 +3185,13 @@ const MapEditor = ({ mapId }) => {
                                                   }
                                                 );
                                               }}
-                                              disabled={isUploading}
+                                              disabled={isReadOnly || isUploading}
                                             />
                                             <button
                                               type="button"
                                               className="nodeBlockUploadButton"
                                               onClick={() => handleBlockUpload(blockKey, index, block.type)}
-                                              disabled={isUploading || !pendingFile}
+                                              disabled={isReadOnly || isUploading || !pendingFile}
                                             >
                                               {isUploading ? (
                                                 <>
@@ -2956,7 +3207,7 @@ const MapEditor = ({ mapId }) => {
                                                 type="button"
                                                 className="nodeBlockUploadButton is-ghost"
                                                 onClick={() => handleRemoveBlockMedia(blockKey, index)}
-                                                disabled={isUploading}
+                                                disabled={isReadOnly || isUploading}
                                               >
                                                 Remove
                                               </button>
@@ -2977,7 +3228,7 @@ const MapEditor = ({ mapId }) => {
                                               onBlur={handleBlockBlur}
                                               placeholder="Add a caption"
                                               className="me-input"
-                                              disabled={isUploading}
+                                              disabled={isReadOnly || isUploading}
                                             />
                                           </div>
                                           {block?.type === "image" && blockUrl && (
@@ -3042,6 +3293,7 @@ const MapEditor = ({ mapId }) => {
                                               onBlur={handleBlockBlur}
                                               placeholder="Add a link URL"
                                               className="me-input"
+                                              disabled={isReadOnly}
                                             />
                                           </div>
                                           <div className="me-field">
@@ -3055,6 +3307,7 @@ const MapEditor = ({ mapId }) => {
                                               onBlur={handleBlockBlur}
                                               placeholder="Short label"
                                               className="me-input"
+                                              disabled={isReadOnly}
                                             />
                                           </div>
                                           {normalizeBlockText(block.url) && (
@@ -3090,7 +3343,7 @@ const MapEditor = ({ mapId }) => {
                                       activePresetId === preset.id ? "is-active" : ""
                                     }`}
                                     onClick={() => handleApplyPreset(preset.id)}
-                                    disabled={!selectedNode}
+                                    disabled={isReadOnly || !selectedNode}
                                     title={`Apply ${preset.label} preset`}
                                     aria-label={`Apply ${preset.label} preset`}
                                   >
@@ -3112,6 +3365,7 @@ const MapEditor = ({ mapId }) => {
                               value={borderColor}
                               onChange={handleBorderColorChange}
                               onCopy={copyToClipboard}
+                              disabled={isReadOnly}
                             />
                           </div>
                         )}
@@ -3141,6 +3395,7 @@ const MapEditor = ({ mapId }) => {
                                 className="me-input"
                                 value={selectedNodeType}
                                 onChange={handleNodeTypeChange}
+                                disabled={isReadOnly}
                               >
                                 {NODE_TYPE_OPTIONS.map((type) => (
                                   <option key={type} value={type}>
@@ -3160,12 +3415,13 @@ const MapEditor = ({ mapId }) => {
                                   value={tagInput}
                                   onChange={(e) => setTagInput(e.target.value)}
                                   onKeyDown={handleTagInputKeyDown}
+                                  disabled={isReadOnly}
                                 />
                                 <button
                                   type="button"
                                   className="tagAddButton"
                                   onClick={handleAddTag}
-                                  disabled={!tagInput.trim()}
+                                  disabled={isReadOnly || !tagInput.trim()}
                                 >
                                   Add
                                 </button>
@@ -3189,6 +3445,7 @@ const MapEditor = ({ mapId }) => {
                                         className="tagChipRemove"
                                         onClick={() => handleRemoveTag(tag)}
                                         aria-label={`Remove tag ${tag}`}
+                                        disabled={isReadOnly}
                                       >
                                         ×
                                       </button>
@@ -3282,6 +3539,7 @@ const MapEditor = ({ mapId }) => {
                             type="text"
                             value={selectedEdge.label || ""}
                             onChange={(e) => {
+                              if (isReadOnly) return;
                               const updated = edges.map((edge) =>
                                 edge.id === selectedEdge.id ? { ...edge, label: e.target.value } : edge
                               );
@@ -3290,6 +3548,7 @@ const MapEditor = ({ mapId }) => {
                               updateMapRow(nodes, updated);
                             }}
                             className="me-input"
+                            disabled={isReadOnly}
                           />
                         </div>
 
@@ -3299,6 +3558,7 @@ const MapEditor = ({ mapId }) => {
                             type="color"
                             value={selectedEdge.style?.stroke || DEFAULT_EDGE_STYLE.stroke}
                             onChange={(e) => {
+                              if (isReadOnly) return;
                               const updated = edges.map((edge) =>
                                 edge.id === selectedEdge.id
                                   ? { ...edge, style: { ...edge.style, stroke: e.target.value } }
@@ -3312,6 +3572,7 @@ const MapEditor = ({ mapId }) => {
                               updateMapRow(nodes, updated);
                             }}
                             className="me-color"
+                            disabled={isReadOnly}
                           />
                         </div>
 
@@ -3320,6 +3581,7 @@ const MapEditor = ({ mapId }) => {
                           <div className="edgeTypeButtons">
                             <button
                               onClick={() => {
+                                if (isReadOnly) return;
                                 const updated = edges.map((edge) =>
                                   edge.id === selectedEdge.id
                                     ? { ...edge, style: { strokeDasharray: undefined }, markerEnd: undefined }
@@ -3334,12 +3596,14 @@ const MapEditor = ({ mapId }) => {
                                 updateMapRow(nodes, updated);
                               }}
                               className="btn-primary"
+                              disabled={isReadOnly}
                             >
                               Solid
                             </button>
 
                             <button
                               onClick={() => {
+                                if (isReadOnly) return;
                                 const updated = edges.map((edge) =>
                                   edge.id === selectedEdge.id
                                     ? { ...edge, style: { strokeDasharray: "5,5" }, markerEnd: undefined }
@@ -3354,12 +3618,14 @@ const MapEditor = ({ mapId }) => {
                                 updateMapRow(nodes, updated);
                               }}
                               className="btn-primary"
+                              disabled={isReadOnly}
                             >
                               Dashed
                             </button>
 
                             <button
                               onClick={() => {
+                                if (isReadOnly) return;
                                 const updated = edges.map((edge) =>
                                   edge.id === selectedEdge.id
                                     ? {
@@ -3378,6 +3644,7 @@ const MapEditor = ({ mapId }) => {
                                 updateMapRow(nodes, updated);
                               }}
                               className="btn-primary"
+                              disabled={isReadOnly}
                             >
                               Arrow
                             </button>

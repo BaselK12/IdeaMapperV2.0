@@ -917,7 +917,7 @@ const Dashboard = ({ theme, onToggleTheme }) => {
       // 2) idempotent participation (avoid duplicate PK)
       const { error: joinErr } = await supabase
         .from("map_participants")
-        .insert({ map_id: id, user_id: me.id, role: "member" });
+        .insert({ map_id: id, user_id: me.id, role: "viewer" });
       if (joinErr) {
         const msg = (joinErr.message || "").toLowerCase();
         if (joinErr.code === "23505" || msg.includes("duplicate")) {
