@@ -14,6 +14,10 @@ html, body {
   --text: #0f172a;
   --muted-text: #64748b;
   --border: #e2e8f0;
+  --ui-fg: #0f172a;
+  --ui-muted: #64748b;
+  --ui-panel: #ffffff;
+  --ui-border: #e2e8f0;
   --accent: #0ea5e9;
   --focus-ring: 0 0 0 4px rgba(14,165,233,0.18);
 
@@ -31,6 +35,14 @@ html, body {
   /* Sidebar width token (used by Sidebar.css & layout) */
   --sb-w: 240px;
 }
+
+:root[data-theme="light"] {
+  --ui-fg: #0f172a;
+  --ui-muted: #64748b;
+  --ui-panel: #ffffff;
+  --ui-border: #e2e8f0;
+}
+
 @media (max-width: 1024px) {
   :root { --sb-w: 76px; }
 }
@@ -776,6 +788,10 @@ h3 {
   --text: #f1f5f9;
   --muted-text: #94a3b8;
   --border: #334155;
+  --ui-fg: #f1f5f9;
+  --ui-muted: #94a3b8;
+  --ui-panel: #1e293b;
+  --ui-border: #334155;
   --accent: #22d3ee;
   --focus-ring: 0 0 0 4px rgba(30, 199, 255, 0.25);
 
