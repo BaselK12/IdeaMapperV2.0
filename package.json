@@ -1,17 +1,14 @@
 {
-  "dependencies": {
-    "@supabase/supabase-js": "^2.58.0",
-    "emoji-picker-react": "^4.12.0",
-    "lottie-react": "^2.4.0",
-    "react-color": "^2.19.3",
-    "react-icons": "^5.4.0",
-    "react-lottie": "^1.2.10",
-    "react-router-dom": "^7.0.2"
-  },
+  "name": "ideamapper-workspace",
+  "private": true,
+  "workspaces": [
+    "client",
+    "client-v3"
+  ],
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev:v2": "npm run start --workspace client",
+    "dev:v3": "npm run dev --workspace client-v3",
+    "build:v2": "npm run build --workspace client",
+    "build:v3": "npm run build --workspace client-v3"
   }
 }
