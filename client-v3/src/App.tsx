@@ -1,17 +1,17 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import { ProtectedRoute } from "@/components/routing/protected-route"
 import { AppShell } from "@/components/layout/app-shell"
-import { DashboardPage } from "@/pages/dashboard-page"
-import { MapsPage } from "@/pages/maps-page"
-import { SettingsPage } from "@/pages/settings-page"
+import { AuthPage } from "@/pages/auth-page"
+import { LandingPage } from "@/pages/landing-page"
 
 function App() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="maps" element={<MapsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+      <Route element={<LandingPage />} path="/" />
+      <Route element={<AuthPage />} path="/auth" />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppShell />} path="/app" />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

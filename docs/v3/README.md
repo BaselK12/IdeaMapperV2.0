@@ -3,7 +3,7 @@
 This repository now contains two frontend clients:
 
 - `client/` = V2 (existing CRA app, unchanged)
-- `client-v3/` = V3 (new Vite + React + TypeScript app)
+- `client-v3/` = V3 (Vite + React + TypeScript foundation)
 
 ## Prerequisites
 
@@ -19,19 +19,19 @@ Use the root `.env.example` as the source of truth for both apps:
 
 ## Install Dependencies
 
-Install dependencies in each app:
+Install dependencies once from the root (recommended):
+
+```bash
+npm install
+```
+
+You can also install per app:
 
 ```bash
 cd client
 npm install
 
 cd ../client-v3
-npm install
-```
-
-You can also install from root if you want to use npm workspaces:
-
-```bash
 npm install
 ```
 
@@ -64,6 +64,12 @@ Equivalent direct command:
 cd client-v3
 npm run dev
 ```
+
+V3 routes:
+
+- `/` landing page (marketing + auth modal)
+- `/auth` full-page auth
+- `/app` protected placeholder shell
 
 ## Build
 

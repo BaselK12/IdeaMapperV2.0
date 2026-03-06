@@ -13,10 +13,12 @@ const parsedEnv = envSchema.safeParse({
 
 export const hasSupabaseEnv = parsedEnv.success
 
-if (!hasSupabaseEnv) {
-  console.warn(
-    "Missing VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY. Falling back to placeholder Supabase values."
-  )
+export const supabaseEnvWarning = hasSupabaseEnv
+  ? null
+  : "Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable authentication."
+
+if (supabaseEnvWarning) {
+  console.warn(`[V3] ${supabaseEnvWarning}`)
 }
 
 const env = parsedEnv.success
