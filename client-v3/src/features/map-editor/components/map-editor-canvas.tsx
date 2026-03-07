@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useMemo, useRef } from "react"
+import { Sparkles } from "lucide-react"
 import ReactFlow, {
   Background,
   Controls,
@@ -7,6 +9,8 @@ import ReactFlow, {
   type EdgeChange,
   type NodeChange,
   type OnSelectionChangeParams,
+  type ReactFlowInstance,
+  type XYPosition,
 } from "reactflow"
 import "reactflow/dist/style.css"
 
@@ -18,14 +22,20 @@ const nodeTypes = {
   mapNode: MapEditorNode,
 }
 
+export type MapEditorCanvasFocusRequest = {
+  nodeId: string
+  requestKey: number
+}
+
 type MapEditorCanvasProps = {
   canEdit: boolean
   edges: MapEditorEdge[]
+  focusRequest: MapEditorCanvasFocusRequest | null
   hasSelection: boolean
   isLoading: boolean
   loadError: string | null
   nodes: MapEditorFlowNode[]
-  onAddNode: () => void
+  onAddNode: (position?: XYPosition) => void
   onClearSelection: () => void
   onConnect: (connection: Connection) => void
   onDeleteSelection: () => void
@@ -38,6 +48,7 @@ type MapEditorCanvasProps = {
 export function MapEditorCanvas({
   canEdit,
   edges,
+  focusRequest,
   hasSelection,
   isLoading,
   loadError,
@@ -51,6 +62,99 @@ export function MapEditorCanvas({
   onRetryLoad,
   onSelectionChange,
 }: MapEditorCanvasProps) {
+  const flowContainerRef = useRef<HTMLDivElement | null>(null)
+  const reactFlowRef = useRef<ReactFlowInstance | null>(null)
+  const hasInitialFitRef = useRef(false)
+
+  const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
+    reactFlowRef.current = instance
+  }, [])
+
+  const handleAddNode = useCallback(() => {
+    if (!canEdit) {
+      return
+    }
+
+    if (!reactFlowRef.current || !flowContainerRef.current) {
+      onAddNode()
+      return
+    }
+
+    const containerBounds = flowContainerRef.current.getBoundingClientRect()
+    const viewportCenter = reactFlowRef.current.screenToFlowPosition({
+      x: containerBounds.left + containerBounds.width / 2,
+      y: containerBounds.top + containerBounds.height / 2,
+    })
+
+    onAddNode({
+      x: viewportCenter.x - 90,
+      y: viewportCenter.y - 40,
+    })
+  }, [canEdit, onAddNode])
+
+  useEffect(() => {
+    if (isLoading) {
+      hasInitialFitRef.current = false
+    }
+  }, [isLoading])
+
+  useEffect(() => {
+    if (isLoading || loadError || !reactFlowRef.current || hasInitialFitRef.current) {
+      return
+    }
+
+    hasInitialFitRef.current = true
+    if (nodes.length === 0) {
+      return
+    }
+
+    requestAnimationFrame(() => {
+      reactFlowRef.current?.fitView({
+        duration: 320,
+        padding: 0.2,
+      })
+    })
+  }, [isLoading, loadError, nodes.length])
+
+  useEffect(() => {
+    if (!focusRequest || !reactFlowRef.current) {
+      return
+    }
+
+    const focusNode = nodes.find((node) => node.id === focusRequest.nodeId)
+    if (!focusNode) {
+      return
+    }
+
+    const nodeWidth = typeof focusNode.width === "number" ? focusNode.width : 180
+    const nodeHeight = typeof focusNode.height === "number" ? focusNode.height : 84
+
+    reactFlowRef.current.setCenter(
+      focusNode.position.x + nodeWidth / 2,
+      focusNode.position.y + nodeHeight / 2,
+      {
+        duration: 300,
+        zoom: Math.max(reactFlowRef.current.getZoom(), 0.85),
+      }
+    )
+  }, [focusRequest, nodes])
+
+  const decoratedEdges = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        animated: Boolean(edge.selected),
+        style: {
+          ...edge.style,
+          stroke: edge.selected
+            ? "hsl(var(--primary) / 0.92)"
+            : "hsl(var(--foreground) / 0.34)",
+          strokeWidth: edge.selected ? 2.4 : 1.8,
+        },
+      })),
+    [edges]
+  )
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center rounded-xl border border-border/70 bg-card/65">
@@ -78,7 +182,7 @@ export function MapEditorCanvas({
 
       <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
         {canEdit ? (
-          <Button onClick={onAddNode} size="sm" variant="secondary">
+          <Button onClick={handleAddNode} size="sm" variant="secondary">
             Add node
           </Button>
         ) : null}
@@ -94,7 +198,7 @@ export function MapEditorCanvas({
         ) : null}
       </div>
 
-      <div className="h-full w-full">
+      <div className="h-full w-full" ref={flowContainerRef}>
         <ReactFlow
           defaultEdgeOptions={{
             markerEnd: {
@@ -107,17 +211,17 @@ export function MapEditorCanvas({
             type: "smoothstep",
           }}
           deleteKeyCode={canEdit ? ["Backspace", "Delete"] : null}
-          edges={edges}
-          edgesFocusable={canEdit}
+          edges={decoratedEdges}
+          edgesFocusable
           edgesUpdatable={canEdit}
           elementsSelectable
-          fitView
           nodeTypes={nodeTypes}
           nodes={nodes}
           nodesConnectable={canEdit}
           nodesDraggable={canEdit}
           onConnect={onConnect}
           onEdgesChange={onEdgesChange}
+          onInit={handleFlowInit}
           onNodesChange={onNodesChange}
           onPaneClick={onClearSelection}
           onSelectionChange={onSelectionChange}
@@ -140,14 +244,17 @@ export function MapEditorCanvas({
       {nodes.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
           <div className="pointer-events-auto max-w-sm rounded-2xl border border-border/80 bg-card/95 p-5 text-center shadow-sm">
+            <span className="inline-flex size-9 items-center justify-center rounded-full border border-primary/25 bg-primary-soft text-primary">
+              <Sparkles className="size-4" />
+            </span>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
               Empty canvas
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Start with a single idea node, then connect related thoughts.
+              Start with one anchor idea and grow the map by connecting related nodes.
             </p>
             {canEdit ? (
-              <Button className="mt-4" onClick={onAddNode} size="sm">
+              <Button className="mt-4" onClick={handleAddNode} size="sm">
                 Add first node
               </Button>
             ) : (

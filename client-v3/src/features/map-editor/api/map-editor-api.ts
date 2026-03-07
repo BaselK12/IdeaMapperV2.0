@@ -62,12 +62,25 @@ function normalizeSaveError(error: { code?: string; message?: string } | null) {
   const message = error.message?.toLowerCase() ?? ""
 
   if (
+    message.includes("failed to fetch") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("offline")
+  ) {
+    return "Network connection was interrupted. Reconnect and try again."
+  }
+
+  if (
     error.code === "42501" ||
     message.includes("permission") ||
     message.includes("not allowed") ||
     message.includes("forbidden")
   ) {
     return "You no longer have permission to edit this map."
+  }
+
+  if (error.code === "57014" || message.includes("statement timeout")) {
+    return "Save timed out. Please try again."
   }
 
   return error.message || "Could not save map changes."

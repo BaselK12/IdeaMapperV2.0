@@ -8,20 +8,29 @@ import {
   MoreHorizontal,
   Search,
   Share2,
-  Tag,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { MapEditorCanvas } from "@/features/map-editor/components/map-editor-canvas"
+import {
+  MapEditorCanvas,
+  type MapEditorCanvasFocusRequest,
+} from "@/features/map-editor/components/map-editor-canvas"
 import { useMapEditor } from "@/features/map-editor/hooks/use-map-editor"
+import type { MapEditorSaveStatus } from "@/features/map-editor/types/map-editor-types"
+import { getNodeTitleFromValue } from "@/features/map-editor/utils/map-editor-graph"
 import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-types"
 import { cn } from "@/lib/utils"
 
 type MapWorkspaceShellProps = {
   map: MapWorkspace
+}
+
+type NavigatorItem = {
+  id: string
+  title: string
 }
 
 function formatRole(role: string) {
@@ -71,7 +80,15 @@ function shortId(value: string) {
   return `${value.slice(0, 8)}...${value.slice(-4)}`
 }
 
-function saveStatusCopy(status: "idle" | "saving" | "saved" | "error") {
+function saveStatusCopy(status: MapEditorSaveStatus, canEdit: boolean) {
+  if (!canEdit) {
+    return "Read-only"
+  }
+
+  if (status === "dirty") {
+    return "Unsaved changes"
+  }
+
   if (status === "saving") {
     return "Saving..."
   }
@@ -87,9 +104,17 @@ function saveStatusCopy(status: "idle" | "saving" | "saved" | "error") {
   return "Ready"
 }
 
-function saveStatusClassName(status: "idle" | "saving" | "saved" | "error") {
+function saveStatusClassName(status: MapEditorSaveStatus, canEdit: boolean) {
+  if (!canEdit) {
+    return "border-border/80 bg-background/90 text-muted-foreground"
+  }
+
   if (status === "saved") {
     return "border-emerald-300/70 bg-emerald-100 text-emerald-700"
+  }
+
+  if (status === "dirty") {
+    return "border-orange-300/70 bg-orange-100 text-orange-700"
   }
 
   if (status === "saving") {
@@ -105,28 +130,46 @@ function saveStatusClassName(status: "idle" | "saving" | "saved" | "error") {
 
 export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
   const [searchTerm, setSearchTerm] = useState("")
+  const [focusRequest, setFocusRequest] = useState<MapEditorCanvasFocusRequest | null>(
+    null
+  )
   const editor = useMapEditor({ mapId: map.id, role: map.role })
   const isReadOnly = !editor.canEdit
 
-  const outlineItems = useMemo(() => {
-    const baseItems = [
-      "Overview lane",
-      "Research cluster",
-      "Priority tasks",
-      "Review notes",
-    ]
-
-    if (map.description.trim()) {
-      baseItems.unshift("Description draft")
-    }
-
+  const outlineItems = useMemo<NavigatorItem[]>(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase()
+
+    const sortedNodes = [...editor.nodes].sort((firstNode, secondNode) => {
+      if (firstNode.position.y !== secondNode.position.y) {
+        return firstNode.position.y - secondNode.position.y
+      }
+
+      return firstNode.position.x - secondNode.position.x
+    })
+
+    const mappedItems = sortedNodes.map((node, index) => ({
+      id: node.id,
+      title: getNodeTitleFromValue(node.data?.title, `Node ${index + 1}`),
+    }))
+
     if (!normalizedTerm) {
-      return baseItems
+      return mappedItems
     }
 
-    return baseItems.filter((item) => item.toLowerCase().includes(normalizedTerm))
-  }, [map.description, searchTerm])
+    return mappedItems.filter(
+      (item) =>
+        item.id.toLowerCase().includes(normalizedTerm) ||
+        item.title.toLowerCase().includes(normalizedTerm)
+    )
+  }, [editor.nodes, searchTerm])
+
+  const handleNavigatorSelect = (nodeId: string) => {
+    editor.selectNode(nodeId)
+    setFocusRequest((currentFocusRequest) => ({
+      nodeId,
+      requestKey: (currentFocusRequest?.requestKey ?? 0) + 1,
+    }))
+  }
 
   return (
     <section className="animate-fade-up flex h-[calc(100vh-2rem)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-lg">
@@ -186,7 +229,7 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
             <Input
               className="h-9 pl-9"
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search sections..."
+              placeholder="Search nodes..."
               value={searchTerm}
             />
           </div>
@@ -194,24 +237,41 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
           <div className="mt-4 space-y-2.5">
             <p className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <LayoutList className="size-3.5" />
-              Outline
+              Nodes
             </p>
             <ul className="space-y-1.5">
               {outlineItems.length > 0 ? (
                 outlineItems.map((item) => (
-                  <li key={item}>
+                  <li key={item.id}>
                     <button
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-foreground/90 transition-colors hover:bg-primary-soft/60"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                        editor.selectedNode?.id === item.id
+                          ? "bg-primary-soft text-foreground"
+                          : "text-foreground/90 hover:bg-primary-soft/60"
+                      )}
+                      onClick={() => handleNavigatorSelect(item.id)}
                       type="button"
                     >
-                      <CircleDot className="size-3.5 text-primary" />
-                      <span>{item}</span>
+                      <CircleDot
+                        className={cn(
+                          "size-3.5",
+                          editor.selectedNode?.id === item.id
+                            ? "text-primary"
+                            : "text-primary/75"
+                        )}
+                      />
+                      <span className="truncate">{item.title}</span>
                     </button>
                   </li>
                 ))
+              ) : editor.nodes.length === 0 ? (
+                <li className="rounded-lg border border-dashed border-border/80 px-3 py-2 text-xs text-muted-foreground">
+                  No nodes yet. Add your first node on the canvas.
+                </li>
               ) : (
                 <li className="rounded-lg border border-dashed border-border/80 px-3 py-2 text-xs text-muted-foreground">
-                  No matching sections yet.
+                  No nodes match your search.
                 </li>
               )}
             </ul>
@@ -220,19 +280,16 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
           <Separator className="my-4" />
 
           <div className="space-y-2.5">
-            <p className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Tag className="size-3.5" />
-              Tags
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {["Ideas", "Research", "Roadmap", "Review"].map((tag) => (
-                <span
-                  className="rounded-full border border-border/80 bg-card px-2.5 py-1 text-xs text-muted-foreground"
-                  key={tag}
-                >
-                  {tag}
-                </span>
-              ))}
+            <p className="text-xs font-medium text-muted-foreground">Map stats</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-border/80 bg-card px-2.5 py-2">
+                <p className="text-[11px] text-muted-foreground">Nodes</p>
+                <p className="text-sm font-semibold text-foreground">{editor.nodeCount}</p>
+              </div>
+              <div className="rounded-xl border border-border/80 bg-card px-2.5 py-2">
+                <p className="text-[11px] text-muted-foreground">Edges</p>
+                <p className="text-sm font-semibold text-foreground">{editor.edges.length}</p>
+              </div>
             </div>
           </div>
         </aside>
@@ -252,26 +309,30 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
               <span
                 className={cn(
                   "rounded-full border px-2.5 py-1",
-                  saveStatusClassName(editor.saveStatus)
+                  saveStatusClassName(editor.saveStatus, editor.canEdit)
                 )}
               >
-                {saveStatusCopy(editor.saveStatus)}
+                {saveStatusCopy(editor.saveStatus, editor.canEdit)}
               </span>
             </div>
 
             {editor.saveError ? (
-              <p className="mt-2 text-xs text-destructive">{editor.saveError}</p>
+              <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2">
+                <p className="text-xs font-medium text-destructive">Could not save latest edit</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{editor.saveError}</p>
+              </div>
             ) : null}
 
             <div className="mt-3 min-h-0 flex-1">
               <MapEditorCanvas
                 canEdit={editor.canEdit}
                 edges={editor.edges}
+                focusRequest={focusRequest}
                 hasSelection={editor.hasSelection}
                 isLoading={editor.isLoading}
                 loadError={editor.loadError}
                 nodes={editor.nodes}
-                onAddNode={() => editor.addNode()}
+                onAddNode={editor.addNode}
                 onClearSelection={editor.clearSelection}
                 onConnect={editor.handleConnect}
                 onDeleteSelection={editor.deleteSelection}
@@ -313,18 +374,55 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
                   </p>
                 ) : null}
               </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                  <p className="text-muted-foreground">Position</p>
+                  <p className="font-medium text-foreground">
+                    {editor.selectedNode.position.x}, {editor.selectedNode.position.y}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                  <p className="text-muted-foreground">Connections</p>
+                  <p className="font-medium text-foreground">
+                    {editor.selectedNode.incomingEdgeCount} in,{" "}
+                    {editor.selectedNode.outgoingEdgeCount} out
+                  </p>
+                </div>
+              </div>
             </div>
-          ) : editor.selectedEdgeId ? (
-            <div className="mt-3 rounded-xl border border-border/80 bg-card/80 p-3.5">
+          ) : editor.selectedEdge ? (
+            <div className="mt-3 space-y-2.5 rounded-xl border border-border/80 bg-card/80 p-3.5">
               <p className="text-sm font-medium text-foreground">Selected edge</p>
-              <p className="mt-2 text-xs text-muted-foreground">ID</p>
-              <p className="text-sm font-medium text-foreground">{editor.selectedEdgeId}</p>
+              <div className="space-y-1 text-xs">
+                <p className="text-muted-foreground">ID</p>
+                <p className="font-medium text-foreground">{editor.selectedEdge.id}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                  <p className="text-muted-foreground">Source</p>
+                  <p className="font-medium text-foreground">
+                    {editor.selectedEdge.sourceNodeId}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                  <p className="text-muted-foreground">Target</p>
+                  <p className="font-medium text-foreground">
+                    {editor.selectedEdge.targetNodeId}
+                  </p>
+                </div>
+              </div>
+              {editor.selectedEdge.label ? (
+                <div className="space-y-1 text-xs">
+                  <p className="text-muted-foreground">Label</p>
+                  <p className="font-medium text-foreground">{editor.selectedEdge.label}</p>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-card/75 p-3.5">
-              <p className="text-sm font-medium text-foreground">No element selected</p>
+              <p className="text-sm font-medium text-foreground">Nothing selected</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Select a node or edge in the canvas to inspect details.
+                Choose a node in the canvas or navigator to inspect and edit details.
               </p>
             </div>
           )}

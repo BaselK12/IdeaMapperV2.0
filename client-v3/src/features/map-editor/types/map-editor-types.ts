@@ -15,9 +15,22 @@ export type MapEditorGraph = {
   nodes: MapEditorNode[]
 }
 
-export type MapEditorSaveStatus = "idle" | "saving" | "saved" | "error"
+export type MapEditorSaveStatus = "idle" | "dirty" | "saving" | "saved" | "error"
 
 export type SelectedNodeSummary = {
+  incomingEdgeCount: number
   id: string
+  outgoingEdgeCount: number
+  position: {
+    x: number
+    y: number
+  }
   title: string
+}
+
+export type SelectedEdgeSummary = {
+  id: string
+  label: string | null
+  sourceNodeId: string
+  targetNodeId: string
 }

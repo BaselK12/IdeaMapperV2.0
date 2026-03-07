@@ -9,7 +9,7 @@ export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) 
       className={cn(
         "min-w-[180px] rounded-2xl border bg-card/95 px-3 py-2.5 shadow-sm transition-all",
         selected
-          ? "border-primary/80 shadow-[0_0_0_2px_hsl(var(--primary-soft))]"
+          ? "border-primary bg-primary-soft/30 shadow-[0_0_0_2px_hsl(var(--primary-soft))]"
           : "border-border/80 hover:border-primary/40"
       )}
     >
