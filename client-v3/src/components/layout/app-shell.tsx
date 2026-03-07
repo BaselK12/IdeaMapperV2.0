@@ -1,15 +1,46 @@
 import { useState } from "react"
-import { LogOut, ShieldCheck } from "lucide-react"
-import { Link, useNavigate } from "react-router-dom"
+import {
+  Blocks,
+  Home,
+  LogOut,
+  Settings,
+  Share2,
+} from "lucide-react"
+import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom"
 
-import { SupabaseWarning } from "@/components/supabase/supabase-warning"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/features/auth/auth-context"
+import { cn } from "@/lib/utils"
+
+const sidebarNav = [
+  {
+    icon: Home,
+    kind: "link" as const,
+    label: "Maps",
+    to: "/app",
+  },
+  {
+    icon: Share2,
+    kind: "disabled" as const,
+    label: "Shared",
+  },
+  {
+    icon: Blocks,
+    kind: "disabled" as const,
+    label: "Templates",
+  },
+  {
+    icon: Settings,
+    kind: "link" as const,
+    label: "Settings",
+    to: "/app/settings",
+  },
+]
 
 export function AppShell() {
   const navigate = useNavigate()
-  const { signOut } = useAuth()
+  const isMapWorkspaceRoute = Boolean(useMatch("/app/map/:mapId"))
+  const { signOut, user } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
 
@@ -28,43 +59,152 @@ export function AppShell() {
     navigate("/", { replace: true })
   }
 
+  if (isMapWorkspaceRoute) {
+    return (
+      <div className="relative min-h-screen overflow-x-hidden bg-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary-soft/80 via-background to-background" />
+        <div className="pointer-events-none absolute -right-28 top-24 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute left-0 top-52 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+
+        <div className="mx-auto flex min-h-screen w-full max-w-[1680px] flex-col px-3 py-3 md:px-5 md:py-5">
+          <Outlet />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
+    <div className="relative min-h-screen overflow-x-hidden bg-background">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary-soft/80 via-background to-background" />
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-8 md:px-6">
-        <header className="animate-fade-up flex items-center justify-between">
-          <p className="inline-flex items-center gap-2 text-sm font-medium">
-            <ShieldCheck className="size-4 text-primary" />
-            Protected App Placeholder
-          </p>
-          <Button disabled={isSigningOut} onClick={handleSignOut} variant="outline">
+      <div className="pointer-events-none absolute -right-28 top-24 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute left-0 top-52 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+
+      <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-5 px-4 py-5 md:flex-row md:gap-6 md:px-6 md:py-6">
+        <aside className="animate-fade-up flex w-full flex-col rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-72 md:p-4">
+          <div className="rounded-xl bg-gradient-to-r from-primary-soft to-background p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+              ideaMapper V3
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Collaborative workspace
+            </p>
+          </div>
+
+          <nav aria-label="Workspace navigation" className="mt-4 grid gap-2">
+            {sidebarNav.map((item) => {
+              const Icon = item.icon
+              const baseClassName =
+                "group inline-flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
+
+              if (item.kind === "link") {
+                return (
+                  <NavLink
+                    className={({ isActive }) =>
+                      cn(
+                        baseClassName,
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-foreground/80 hover:bg-primary-soft hover:text-foreground"
+                      )
+                    }
+                    end={item.to === "/app"}
+                    key={item.label}
+                    to={item.to}
+                  >
+                    <Icon className="size-4" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                )
+              }
+
+              return (
+                <button
+                  className={cn(
+                    baseClassName,
+                    "cursor-default text-muted-foreground/70 hover:bg-muted"
+                  )}
+                  disabled
+                  key={item.label}
+                  type="button"
+                >
+                  <Icon className="size-4" />
+                  <span>{item.label}</span>
+                  <span className="ml-auto rounded-full border border-border/80 bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Soon
+                  </span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <div className="mt-auto space-y-3 rounded-xl border border-border/70 bg-background/80 p-3">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex size-9 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary">
+                {(user?.email?.[0] ?? "U").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {user?.email?.split("@")[0] ?? "User"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {user?.email ?? "Signed in"}
+                </p>
+              </div>
+            </div>
+
+            {signOutError ? (
+              <p className="text-xs text-destructive">{signOutError}</p>
+            ) : null}
+
+            <Button
+              className="w-full justify-start"
+              disabled={isSigningOut}
+              onClick={handleSignOut}
+              size="sm"
+              variant="outline"
+            >
+              <LogOut className="size-4" />
+              {isSigningOut ? "Signing out..." : "Sign out"}
+            </Button>
+          </div>
+        </aside>
+
+        <div className="flex min-h-0 flex-1 flex-col">
+          <header className="animate-fade-up rounded-2xl border border-border/70 bg-card/85 px-5 py-4 shadow-sm md:px-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/90">
+              Workspace
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+                  Map Collaboration Hub
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Organize maps, invite participants, and continue your work.
+                </p>
+              </div>
+              <div className="hidden items-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground md:inline-flex">
+                <Settings className="mr-2 size-4 text-primary" />
+                V3 shell
+              </div>
+            </div>
+          </header>
+
+          <Button
+            className="mt-3 md:hidden"
+            disabled={isSigningOut}
+            onClick={handleSignOut}
+            size="sm"
+            variant="outline"
+          >
             <LogOut className="size-4" />
             {isSigningOut ? "Signing out..." : "Sign out"}
           </Button>
-        </header>
 
-        <main className="mt-12 flex flex-1 items-start justify-center">
-          <Card className="animate-fade-up w-full max-w-2xl border-border/70 bg-card/90 shadow-md">
-            <CardHeader>
-              <CardTitle>V3 App Shell</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-muted-foreground">
-              <p>
-                This route is intentionally minimal and protected. Replace this
-                with your authenticated product shell as V3 features are added.
-              </p>
-              <SupabaseWarning />
-              {signOutError ? (
-                <p className="text-xs text-destructive">{signOutError}</p>
-              ) : null}
-              <div>
-                <Button asChild>
-                  <Link to="/">Back to landing</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
+          <main className="mt-5 min-h-0 flex-1 pb-10">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   )
