@@ -15,6 +15,8 @@ import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { MapEditorCanvas } from "@/features/map-editor/components/map-editor-canvas"
+import { useMapEditor } from "@/features/map-editor/hooks/use-map-editor"
 import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-types"
 import { cn } from "@/lib/utils"
 
@@ -69,14 +71,42 @@ function shortId(value: string) {
   return `${value.slice(0, 8)}...${value.slice(-4)}`
 }
 
-const canvasGridStyle = {
-  backgroundImage:
-    "radial-gradient(circle at 1px 1px, hsl(var(--border) / 0.55) 1px, transparent 0)",
-  backgroundSize: "22px 22px",
+function saveStatusCopy(status: "idle" | "saving" | "saved" | "error") {
+  if (status === "saving") {
+    return "Saving..."
+  }
+
+  if (status === "saved") {
+    return "All changes saved"
+  }
+
+  if (status === "error") {
+    return "Save failed"
+  }
+
+  return "Ready"
+}
+
+function saveStatusClassName(status: "idle" | "saving" | "saved" | "error") {
+  if (status === "saved") {
+    return "border-emerald-300/70 bg-emerald-100 text-emerald-700"
+  }
+
+  if (status === "saving") {
+    return "border-amber-300/70 bg-amber-100 text-amber-700"
+  }
+
+  if (status === "error") {
+    return "border-destructive/35 bg-destructive/10 text-destructive"
+  }
+
+  return "border-border/80 bg-background/90 text-muted-foreground"
 }
 
 export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
   const [searchTerm, setSearchTerm] = useState("")
+  const editor = useMapEditor({ mapId: map.id, role: map.role })
+  const isReadOnly = !editor.canEdit
 
   const outlineItems = useMemo(() => {
     const baseItems = [
@@ -208,9 +238,6 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
         </aside>
 
         <main className="relative min-h-[360px] overflow-hidden rounded-2xl border border-border/70 bg-background/85">
-          <div className="absolute inset-0" style={canvasGridStyle} />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/55 via-transparent to-background/70" />
-
           <div className="relative flex h-full flex-col p-4 md:p-6">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
@@ -222,24 +249,37 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
               <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
                 Last edited {formatLastEdited(map.lastEdited)}
               </span>
+              <span
+                className={cn(
+                  "rounded-full border px-2.5 py-1",
+                  saveStatusClassName(editor.saveStatus)
+                )}
+              >
+                {saveStatusCopy(editor.saveStatus)}
+              </span>
             </div>
 
-            <div className="mt-auto max-w-xl rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                Editor Canvas
-              </p>
-              <h2 className="mt-2 text-lg font-semibold tracking-tight text-foreground">
-                Workspace scaffold is ready
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                This area is prepared for React Flow in the next PR. Node and edge
-                rendering can plug directly into this canvas surface.
-              </p>
-              <ul className="mt-4 space-y-1.5 text-sm text-muted-foreground">
-                <li>React Flow mount point and viewport controls</li>
-                <li>Map nodes and edges loading pipeline</li>
-                <li>Basic edit actions and selection state</li>
-              </ul>
+            {editor.saveError ? (
+              <p className="mt-2 text-xs text-destructive">{editor.saveError}</p>
+            ) : null}
+
+            <div className="mt-3 min-h-0 flex-1">
+              <MapEditorCanvas
+                canEdit={editor.canEdit}
+                edges={editor.edges}
+                hasSelection={editor.hasSelection}
+                isLoading={editor.isLoading}
+                loadError={editor.loadError}
+                nodes={editor.nodes}
+                onAddNode={() => editor.addNode()}
+                onClearSelection={editor.clearSelection}
+                onConnect={editor.handleConnect}
+                onDeleteSelection={editor.deleteSelection}
+                onEdgesChange={editor.handleEdgesChange}
+                onNodesChange={editor.handleNodesChange}
+                onRetryLoad={editor.retryLoad}
+                onSelectionChange={editor.handleSelectionChange}
+              />
             </div>
           </div>
         </main>
@@ -249,12 +289,45 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
             Inspector
           </p>
 
-          <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-card/75 p-3.5">
-            <p className="text-sm font-medium text-foreground">No element selected</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Select a node or edge in the canvas to inspect and edit details.
-            </p>
-          </div>
+          {editor.selectedNode ? (
+            <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/80 p-3.5">
+              <p className="text-sm font-medium text-foreground">Selected node</p>
+              <div className="space-y-1 text-xs">
+                <p className="text-muted-foreground">ID</p>
+                <p className="font-medium text-foreground">{editor.selectedNode.id}</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground" htmlFor="selected-node-title">
+                  Title
+                </label>
+                <Input
+                  className="h-9"
+                  disabled={isReadOnly}
+                  id="selected-node-title"
+                  onChange={(event) => editor.updateSelectedNodeTitle(event.target.value)}
+                  value={editor.selectedNode.title}
+                />
+                {isReadOnly ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    View-only access. Editors and admins can rename nodes.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : editor.selectedEdgeId ? (
+            <div className="mt-3 rounded-xl border border-border/80 bg-card/80 p-3.5">
+              <p className="text-sm font-medium text-foreground">Selected edge</p>
+              <p className="mt-2 text-xs text-muted-foreground">ID</p>
+              <p className="text-sm font-medium text-foreground">{editor.selectedEdgeId}</p>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-card/75 p-3.5">
+              <p className="text-sm font-medium text-foreground">No element selected</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Select a node or edge in the canvas to inspect details.
+              </p>
+            </div>
+          )}
 
           <Separator className="my-4" />
 
@@ -266,6 +339,10 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Role</span>
               <span className="font-medium text-foreground">{formatRole(map.role)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Nodes</span>
+              <span className="font-medium text-foreground">{editor.nodeCount}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Last edited</span>
