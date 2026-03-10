@@ -22,6 +22,22 @@ const nodeTypes = {
   mapNode: MapEditorNode,
 }
 
+function isEditableEventTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  return Boolean(
+    target.closest(
+      "input, textarea, select, [contenteditable='true'], [role='textbox']"
+    )
+  )
+}
+
 export type MapEditorCanvasFocusRequest = {
   nodeId: string
   requestKey: number
@@ -139,6 +155,34 @@ export function MapEditorCanvas({
     )
   }, [focusRequest, nodes])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!canEdit || !hasSelection) {
+        return
+      }
+
+      if (event.defaultPrevented) {
+        return
+      }
+
+      if (event.key !== "Backspace" && event.key !== "Delete") {
+        return
+      }
+
+      if (isEditableEventTarget(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      onDeleteSelection()
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [canEdit, hasSelection, onDeleteSelection])
+
   const decoratedEdges = useMemo(
     () =>
       edges.map((edge) => ({
@@ -210,7 +254,7 @@ export function MapEditorCanvas({
             },
             type: "smoothstep",
           }}
-          deleteKeyCode={canEdit ? ["Backspace", "Delete"] : null}
+          deleteKeyCode={null}
           edges={decoratedEdges}
           edgesFocusable
           edgesUpdatable={canEdit}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import type { User } from "@supabase/supabase-js"
 import {
   ArrowLeft,
   CalendarClock,
@@ -19,12 +20,18 @@ import {
   type MapEditorCanvasFocusRequest,
 } from "@/features/map-editor/components/map-editor-canvas"
 import { useMapEditor } from "@/features/map-editor/hooks/use-map-editor"
-import type { MapEditorSaveStatus } from "@/features/map-editor/types/map-editor-types"
+import type {
+  MapEditorSaveStatus,
+  MapEditorSyncStatus,
+} from "@/features/map-editor/types/map-editor-types"
 import { getNodeTitleFromValue } from "@/features/map-editor/utils/map-editor-graph"
+import { MapWorkspaceParticipantStrip } from "@/features/map-workspace/components/map-workspace-participant-strip"
+import { useMapWorkspacePresence } from "@/features/map-workspace/hooks/use-map-workspace-presence"
 import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-types"
 import { cn } from "@/lib/utils"
 
 type MapWorkspaceShellProps = {
+  currentUser: User
   map: MapWorkspace
 }
 
@@ -81,6 +88,10 @@ function shortId(value: string) {
 }
 
 function saveStatusCopy(status: MapEditorSaveStatus, canEdit: boolean) {
+  if (status === "error") {
+    return "Save failed"
+  }
+
   if (!canEdit) {
     return "Read-only"
   }
@@ -97,14 +108,14 @@ function saveStatusCopy(status: MapEditorSaveStatus, canEdit: boolean) {
     return "All changes saved"
   }
 
-  if (status === "error") {
-    return "Save failed"
-  }
-
   return "Ready"
 }
 
 function saveStatusClassName(status: MapEditorSaveStatus, canEdit: boolean) {
+  if (status === "error") {
+    return "border-destructive/35 bg-destructive/10 text-destructive"
+  }
+
   if (!canEdit) {
     return "border-border/80 bg-background/90 text-muted-foreground"
   }
@@ -121,20 +132,47 @@ function saveStatusClassName(status: MapEditorSaveStatus, canEdit: boolean) {
     return "border-amber-300/70 bg-amber-100 text-amber-700"
   }
 
+  return "border-border/80 bg-background/90 text-muted-foreground"
+}
+
+function syncStatusCopy(status: MapEditorSyncStatus) {
+  if (status === "error") {
+    return "Sync error"
+  }
+
+  if (status === "connecting") {
+    return "Sync connecting"
+  }
+
+  return "Sync listening"
+}
+
+function syncStatusClassName(status: MapEditorSyncStatus) {
   if (status === "error") {
     return "border-destructive/35 bg-destructive/10 text-destructive"
   }
 
-  return "border-border/80 bg-background/90 text-muted-foreground"
+  if (status === "connecting") {
+    return "border-amber-300/70 bg-amber-100 text-amber-700"
+  }
+
+  return "border-sky-300/70 bg-sky-100 text-sky-700"
 }
 
-export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
+export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [focusRequest, setFocusRequest] = useState<MapEditorCanvasFocusRequest | null>(
     null
   )
   const editor = useMapEditor({ mapId: map.id, role: map.role })
+  const mapPresence = useMapWorkspacePresence({
+    currentUser,
+    currentUserRole: map.role,
+    mapId: map.id,
+    ownerId: map.ownerId,
+  })
   const isReadOnly = !editor.canEdit
+  const mapLastEdited = editor.lastEdited ?? map.lastEdited
 
   const outlineItems = useMemo<NavigatorItem[]>(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase()
@@ -216,6 +254,14 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
             {map.description || "No description added yet for this map."}
           </p>
         </div>
+
+        <MapWorkspaceParticipantStrip
+          errorMessage={mapPresence.errorMessage}
+          isLoading={mapPresence.isLoading}
+          isPresenceUnavailable={mapPresence.isPresenceUnavailable}
+          onRetry={mapPresence.retry}
+          participants={mapPresence.participants}
+        />
       </header>
 
       <div className="grid min-h-0 flex-1 gap-4 p-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
@@ -304,7 +350,7 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
                 {formatRole(map.role)} access
               </span>
               <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
-                Last edited {formatLastEdited(map.lastEdited)}
+                Last edited {formatLastEdited(mapLastEdited)}
               </span>
               <span
                 className={cn(
@@ -314,12 +360,57 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
               >
                 {saveStatusCopy(editor.saveStatus, editor.canEdit)}
               </span>
+              <span
+                className={cn(
+                  "rounded-full border px-2.5 py-1",
+                  syncStatusClassName(editor.syncStatus)
+                )}
+              >
+                {syncStatusCopy(editor.syncStatus)}
+              </span>
+              {editor.hasRemoteUpdateAvailable ? (
+                <span className="rounded-full border border-orange-300/70 bg-orange-100 px-2.5 py-1 text-orange-700">
+                  Remote update available
+                </span>
+              ) : null}
             </div>
+
+            {editor.hasRemoteUpdateAvailable ? (
+              <div className="mt-2 rounded-lg border border-orange-300/50 bg-orange-50 px-3 py-2">
+                <p className="text-xs font-medium text-orange-700">
+                  A newer saved version is available from another session.
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Save your local edits or reload to sync to the latest persisted graph.
+                </p>
+                <Button
+                  className="mt-2 h-7 px-2.5 text-xs"
+                  disabled={editor.saveStatus === "saving"}
+                  onClick={editor.reloadFromRemote}
+                  size="sm"
+                  variant="outline"
+                >
+                  Reload latest
+                </Button>
+              </div>
+            ) : null}
 
             {editor.saveError ? (
               <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2">
                 <p className="text-xs font-medium text-destructive">Could not save latest edit</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{editor.saveError}</p>
+                {editor.canEdit ? (
+                  <Button className="mt-2 h-7 px-2.5 text-xs" onClick={editor.retrySave} size="sm" variant="outline">
+                    Retry save
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {editor.syncError ? (
+              <div className="mt-2 rounded-lg border border-amber-300/45 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium text-amber-700">Realtime sync issue</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{editor.syncError}</p>
               </div>
             ) : null}
 
@@ -445,7 +536,7 @@ export function MapWorkspaceShell({ map }: MapWorkspaceShellProps) {
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Last edited</span>
               <span className="font-medium text-foreground">
-                {formatLastEdited(map.lastEdited)}
+                {formatLastEdited(mapLastEdited)}
               </span>
             </div>
           </div>

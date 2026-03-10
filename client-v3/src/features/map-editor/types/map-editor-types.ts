@@ -16,6 +16,7 @@ export type MapEditorGraph = {
 }
 
 export type MapEditorSaveStatus = "idle" | "dirty" | "saving" | "saved" | "error"
+export type MapEditorSyncStatus = "connecting" | "listening" | "error"
 
 export type SelectedNodeSummary = {
   incomingEdgeCount: number

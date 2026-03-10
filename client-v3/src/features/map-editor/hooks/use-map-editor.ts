@@ -1,5 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react"
 import {
   addEdge,
   applyEdgeChanges,
@@ -13,19 +20,25 @@ import {
 
 import {
   fetchMapEditorGraphById,
+  MapEditorSaveError,
   saveMapEditorGraphById,
 } from "@/features/map-editor/api/map-editor-api"
+import { supabase } from "@/lib/supabase"
 import type {
   MapEditorEdge,
   MapEditorNode,
   MapEditorSaveStatus,
+  MapEditorSyncStatus,
   SelectedEdgeSummary,
   SelectedNodeSummary,
 } from "@/features/map-editor/types/map-editor-types"
 import {
   createGraphSignature,
   createNewNode,
+  filterEdgesByExistingNodes,
   getNodeTitleFromValue,
+  normalizeLoadedEdges,
+  normalizeLoadedNodes,
   toRoleCanEdit,
 } from "@/features/map-editor/utils/map-editor-graph"
 
@@ -36,22 +49,166 @@ type UseMapEditorParams = {
 
 const SAVE_DEBOUNCE_MS = 700
 
+type ReconciledGraphSelection = {
+  edges: MapEditorEdge[]
+  nodes: MapEditorNode[]
+  selectedEdgeId: string | null
+  selectedNodeId: string | null
+}
+
+type RemoteMapRow = {
+  edges?: unknown
+  id?: unknown
+  last_edited?: unknown
+  nodes?: unknown
+}
+
+type RemoteGraphSnapshot = {
+  edges: MapEditorEdge[]
+  lastEdited: string | null
+  nodes: MapEditorNode[]
+  signature: string
+}
+
+function toSaveErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Could not save map changes."
+}
+
+function isPermissionLockError(error: unknown) {
+  return (
+    error instanceof MapEditorSaveError &&
+    (error.code === "permission" || error.code === "rejected")
+  )
+}
+
+function filterReadOnlyNodeChanges(changes: NodeChange[]) {
+  return changes.filter(
+    (change) => change.type === "select" || change.type === "dimensions"
+  )
+}
+
+function filterReadOnlyEdgeChanges(changes: EdgeChange[]) {
+  return changes.filter((change) => change.type === "select")
+}
+
+function hasPersistableNodeChanges(changes: NodeChange[]) {
+  return changes.some(
+    (change) => change.type !== "select" && change.type !== "dimensions"
+  )
+}
+
+function hasPersistableEdgeChanges(changes: EdgeChange[]) {
+  return changes.some((change) => change.type !== "select")
+}
+
+function toIsoStringOrNull(value: unknown) {
+  if (typeof value !== "string") {
+    return null
+  }
+
+  const nextValue = value.trim()
+  if (!nextValue) {
+    return null
+  }
+
+  return nextValue
+}
+
+function toSyncErrorMessage(status: string) {
+  if (status === "CHANNEL_ERROR") {
+    return "Realtime sync connection failed."
+  }
+
+  if (status === "TIMED_OUT") {
+    return "Realtime sync timed out."
+  }
+
+  if (status === "CLOSED") {
+    return "Realtime sync disconnected."
+  }
+
+  return "Realtime sync is unavailable."
+}
+
+function reconcileSelection(
+  nodes: MapEditorNode[],
+  edges: MapEditorEdge[],
+  selectedNodeId: string | null,
+  selectedEdgeId: string | null
+): ReconciledGraphSelection {
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const edgeIds = new Set(edges.map((edge) => edge.id))
+
+  const nextSelectedNodeId =
+    selectedNodeId && nodeIds.has(selectedNodeId) ? selectedNodeId : null
+  const nextSelectedEdgeId =
+    nextSelectedNodeId ||
+    !selectedEdgeId ||
+    !edgeIds.has(selectedEdgeId)
+      ? null
+      : selectedEdgeId
+
+  const nextNodes = nodes.map((node) => {
+    const shouldSelect = nextSelectedNodeId === node.id
+    if (Boolean(node.selected) === shouldSelect) {
+      return node
+    }
+
+    return {
+      ...node,
+      selected: shouldSelect,
+    }
+  })
+
+  const nextEdges = edges.map((edge) => {
+    const shouldSelect = nextSelectedEdgeId === edge.id
+    if (Boolean(edge.selected) === shouldSelect) {
+      return edge
+    }
+
+    return {
+      ...edge,
+      selected: shouldSelect,
+    }
+  })
+
+  return {
+    edges: nextEdges,
+    nodes: nextNodes,
+    selectedEdgeId: nextSelectedEdgeId,
+    selectedNodeId: nextSelectedNodeId,
+  }
+}
+
 export function useMapEditor({ mapId, role }: UseMapEditorParams) {
-  const canEdit = useMemo(() => toRoleCanEdit(role), [role])
+  const roleCanEdit = useMemo(() => toRoleCanEdit(role), [role])
+  const [isEditLocked, setIsEditLocked] = useState(false)
+  const canEdit = roleCanEdit && !isEditLocked
+
   const [nodes, setNodes] = useState<MapEditorNode[]>([])
   const [edges, setEdges] = useState<MapEditorEdge[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<MapEditorSaveStatus>("idle")
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastEdited, setLastEdited] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<MapEditorSyncStatus>("connecting")
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [hasRemoteUpdateAvailable, setHasRemoteUpdateAvailable] = useState(false)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestNodesRef = useRef<MapEditorNode[]>([])
   const latestEdgesRef = useRef<MapEditorEdge[]>([])
+  const selectedNodeIdRef = useRef<string | null>(null)
+  const selectedEdgeIdRef = useRef<string | null>(null)
   const persistedSignatureRef = useRef("")
+  const pendingRemoteGraphRef = useRef<RemoteGraphSnapshot | null>(null)
   const isHydratedRef = useRef(false)
   const isPersistingRef = useRef(false)
   const shouldPersistAgainRef = useRef(false)
+  const editorSessionRef = useRef(0)
+  const canEditRef = useRef(canEdit)
+  const isMountedRef = useRef(true)
 
   const graphQuery = useQuery({
     enabled: Boolean(mapId),
@@ -60,6 +217,76 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     refetchOnWindowFocus: false,
     retry: false,
   })
+
+  const setSaveStatusSafe = useCallback(
+    (nextStatus: SetStateAction<MapEditorSaveStatus>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setSaveStatus(nextStatus)
+    },
+    []
+  )
+
+  const setSaveErrorSafe = useCallback(
+    (nextError: SetStateAction<string | null>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setSaveError(nextError)
+    },
+    []
+  )
+
+  const setSyncStatusSafe = useCallback(
+    (nextStatus: SetStateAction<MapEditorSyncStatus>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setSyncStatus(nextStatus)
+    },
+    []
+  )
+
+  const setSyncErrorSafe = useCallback(
+    (nextError: SetStateAction<string | null>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setSyncError(nextError)
+    },
+    []
+  )
+
+  const setLastEditedSafe = useCallback(
+    (nextLastEdited: SetStateAction<string | null>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setLastEdited(nextLastEdited)
+    },
+    []
+  )
+
+  const setHasRemoteUpdateAvailableSafe = useCallback(
+    (nextValue: SetStateAction<boolean>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setHasRemoteUpdateAvailable(nextValue)
+    },
+    []
+  )
+
+  useEffect(() => {
+    canEditRef.current = canEdit
+  }, [canEdit])
 
   useEffect(() => {
     latestNodesRef.current = nodes
@@ -70,119 +297,472 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   }, [edges])
 
   useEffect(() => {
-    if (!graphQuery.data) {
-      return
-    }
+    selectedNodeIdRef.current = selectedNodeId
+  }, [selectedNodeId])
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNodes(graphQuery.data.nodes)
-    setEdges(graphQuery.data.edges)
-    setSelectedNodeId(null)
-    setSelectedEdgeId(null)
-    setSaveStatus(canEdit ? "saved" : "idle")
-    setSaveError(null)
-    const hydratedSignature = createGraphSignature(
-      graphQuery.data.nodes,
-      graphQuery.data.edges
-    )
-    persistedSignatureRef.current = hydratedSignature
-    isHydratedRef.current = true
+  useEffect(() => {
+    selectedEdgeIdRef.current = selectedEdgeId
+  }, [selectedEdgeId])
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    setIsEditLocked(false)
+  }, [mapId, roleCanEdit])
+
+  useEffect(() => {
+    editorSessionRef.current += 1
+    isHydratedRef.current = false
     isPersistingRef.current = false
     shouldPersistAgainRef.current = false
+    pendingRemoteGraphRef.current = null
+
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-  }, [canEdit, graphQuery.data])
 
-  const persistLatestGraph = useCallback(async () => {
-    if (!canEdit || !isHydratedRef.current) {
+    setNodes([])
+    setEdges([])
+    setSelectedNodeId(null)
+    setSelectedEdgeId(null)
+    selectedNodeIdRef.current = null
+    selectedEdgeIdRef.current = null
+    setSaveStatusSafe("idle")
+    setSaveErrorSafe(null)
+    setLastEditedSafe(null)
+    setSyncStatusSafe("connecting")
+    setSyncErrorSafe(null)
+    setHasRemoteUpdateAvailableSafe(false)
+  }, [
+    mapId,
+    setHasRemoteUpdateAvailableSafe,
+    setLastEditedSafe,
+    setSaveErrorSafe,
+    setSaveStatusSafe,
+    setSyncErrorSafe,
+    setSyncStatusSafe,
+  ])
+
+  useEffect(() => {
+    if (!graphQuery.data) {
       return
     }
 
-    const nextNodes = latestNodesRef.current
-    const nextEdges = latestEdgesRef.current
-    const nextSignature = createGraphSignature(nextNodes, nextEdges)
+    editorSessionRef.current += 1
+    latestNodesRef.current = graphQuery.data.nodes
+    latestEdgesRef.current = graphQuery.data.edges
 
-    if (nextSignature === persistedSignatureRef.current) {
-      setSaveStatus("saved")
-      setSaveError(null)
-      return
+    setNodes(graphQuery.data.nodes)
+    setEdges(graphQuery.data.edges)
+    setSelectedNodeId(null)
+    setSelectedEdgeId(null)
+    selectedNodeIdRef.current = null
+    selectedEdgeIdRef.current = null
+    setSaveStatusSafe(canEdit ? "saved" : "idle")
+    setSaveErrorSafe(null)
+    setLastEditedSafe(graphQuery.data.lastEdited)
+    setHasRemoteUpdateAvailableSafe(false)
+    pendingRemoteGraphRef.current = null
+
+    persistedSignatureRef.current = createGraphSignature(
+      graphQuery.data.nodes,
+      graphQuery.data.edges
+    )
+    isHydratedRef.current = true
+    isPersistingRef.current = false
+    shouldPersistAgainRef.current = false
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+  }, [
+    canEdit,
+    graphQuery.data,
+    setHasRemoteUpdateAvailableSafe,
+    setLastEditedSafe,
+    setSaveErrorSafe,
+    setSaveStatusSafe,
+  ])
+
+  const hasUnsavedLocalChanges = useCallback(() => {
+    if (!isHydratedRef.current) {
+      return false
     }
 
-    if (isPersistingRef.current) {
-      shouldPersistAgainRef.current = true
-      return
+    if (
+      Boolean(saveTimerRef.current) ||
+      isPersistingRef.current ||
+      shouldPersistAgainRef.current
+    ) {
+      return true
     }
 
-    isPersistingRef.current = true
-    setSaveStatus("saving")
-    setSaveError(null)
+    const currentSignature = createGraphSignature(
+      latestNodesRef.current,
+      latestEdgesRef.current
+    )
 
-    let didFail = false
+    return currentSignature !== persistedSignatureRef.current
+  }, [])
 
-    try {
-      await saveMapEditorGraphById(mapId, nextNodes, nextEdges)
-      persistedSignatureRef.current = nextSignature
+  const normalizeRemoteSnapshot = useCallback(
+    (row: RemoteMapRow): RemoteGraphSnapshot | null => {
+      const rowId = typeof row.id === "string" ? row.id.trim() : ""
+      if (!rowId || rowId !== mapId) {
+        return null
+      }
 
-      const latestAfterSave = createGraphSignature(
-        latestNodesRef.current,
-        latestEdgesRef.current
+      const normalizedNodes = normalizeLoadedNodes(row.nodes)
+      const normalizedEdges = filterEdgesByExistingNodes(
+        normalizeLoadedEdges(row.edges),
+        normalizedNodes
       )
 
-      if (latestAfterSave === persistedSignatureRef.current) {
-        setSaveStatus("saved")
-        setSaveError(null)
-      } else {
-        shouldPersistAgainRef.current = true
-        setSaveStatus("dirty")
+      return {
+        edges: normalizedEdges,
+        lastEdited: toIsoStringOrNull(row.last_edited),
+        nodes: normalizedNodes,
+        signature: createGraphSignature(normalizedNodes, normalizedEdges),
       }
-    } catch (error) {
-      didFail = true
-      setSaveStatus("error")
-      setSaveError(error instanceof Error ? error.message : "Could not save map changes.")
-    } finally {
-      isPersistingRef.current = false
+    },
+    [mapId]
+  )
 
-      if (shouldPersistAgainRef.current && !didFail) {
-        shouldPersistAgainRef.current = false
-        void persistLatestGraph()
+  const applyRemoteSnapshot = useCallback(
+    (snapshot: RemoteGraphSnapshot) => {
+      const nextGraph = reconcileSelection(
+        snapshot.nodes,
+        snapshot.edges,
+        selectedNodeIdRef.current,
+        selectedEdgeIdRef.current
+      )
+
+      latestNodesRef.current = nextGraph.nodes
+      latestEdgesRef.current = nextGraph.edges
+      persistedSignatureRef.current = snapshot.signature
+      pendingRemoteGraphRef.current = null
+      shouldPersistAgainRef.current = false
+      isHydratedRef.current = true
+
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
       }
+
+      setNodes(nextGraph.nodes)
+      setEdges(nextGraph.edges)
+      setSelectedNodeId(nextGraph.selectedNodeId)
+      setSelectedEdgeId(nextGraph.selectedEdgeId)
+      selectedNodeIdRef.current = nextGraph.selectedNodeId
+      selectedEdgeIdRef.current = nextGraph.selectedEdgeId
+      setSaveErrorSafe(null)
+      setSaveStatusSafe(canEditRef.current ? "saved" : "idle")
+      setLastEditedSafe(snapshot.lastEdited)
+      setHasRemoteUpdateAvailableSafe(false)
+    },
+    [
+      setHasRemoteUpdateAvailableSafe,
+      setLastEditedSafe,
+      setSaveErrorSafe,
+      setSaveStatusSafe,
+    ]
+  )
+
+  const reloadFromRemote = useCallback(() => {
+    if (isPersistingRef.current) {
+      return
     }
-  }, [canEdit, mapId])
 
-  const queuePersist = useCallback(
-    (nextNodes: MapEditorNode[], nextEdges: MapEditorEdge[]) => {
-      if (!canEdit || !isHydratedRef.current) {
+    const pendingRemoteGraph = pendingRemoteGraphRef.current
+    if (!pendingRemoteGraph) {
+      return
+    }
+
+    applyRemoteSnapshot(pendingRemoteGraph)
+  }, [applyRemoteSnapshot])
+
+  useEffect(() => {
+    if (!graphQuery.data) {
+      return
+    }
+
+    const channel = supabase
+      .channel(`map-editor-graph-${mapId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", filter: `id=eq.${mapId}`, schema: "public", table: "maps" },
+        (payload) => {
+          const row = payload.new
+          if (!row || typeof row !== "object") {
+            return
+          }
+
+          const remoteSnapshot = normalizeRemoteSnapshot(row as RemoteMapRow)
+          if (!remoteSnapshot) {
+            return
+          }
+
+          const currentSignature = createGraphSignature(
+            latestNodesRef.current,
+            latestEdgesRef.current
+          )
+
+          if (remoteSnapshot.signature === currentSignature) {
+            persistedSignatureRef.current = remoteSnapshot.signature
+            setLastEditedSafe(remoteSnapshot.lastEdited)
+            pendingRemoteGraphRef.current = null
+            setHasRemoteUpdateAvailableSafe(false)
+            if (!isPersistingRef.current && !hasUnsavedLocalChanges()) {
+              setSaveStatusSafe(canEditRef.current ? "saved" : "idle")
+            }
+            return
+          }
+
+          if (remoteSnapshot.signature === persistedSignatureRef.current) {
+            setLastEditedSafe(remoteSnapshot.lastEdited)
+            return
+          }
+
+          if (hasUnsavedLocalChanges()) {
+            pendingRemoteGraphRef.current = remoteSnapshot
+            setLastEditedSafe(remoteSnapshot.lastEdited)
+            setHasRemoteUpdateAvailableSafe(true)
+            return
+          }
+
+          applyRemoteSnapshot(remoteSnapshot)
+        }
+      )
+
+    setSyncStatusSafe("connecting")
+    setSyncErrorSafe(null)
+
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        setSyncStatusSafe("listening")
+        setSyncErrorSafe(null)
         return
       }
 
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
+        setSyncStatusSafe("error")
+        setSyncErrorSafe(toSyncErrorMessage(status))
+      }
+    })
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [
+    applyRemoteSnapshot,
+    graphQuery.data,
+    hasUnsavedLocalChanges,
+    mapId,
+    normalizeRemoteSnapshot,
+    setHasRemoteUpdateAvailableSafe,
+    setLastEditedSafe,
+    setSaveStatusSafe,
+    setSyncErrorSafe,
+    setSyncStatusSafe,
+  ])
+
+  const persistLatestGraph = useCallback(
+    async (expectedSession = editorSessionRef.current) => {
+      if (!canEditRef.current || !isHydratedRef.current) {
+        return
+      }
+
+      if (expectedSession !== editorSessionRef.current) {
+        return
+      }
+
+      const nextNodes = latestNodesRef.current
+      const nextEdges = latestEdgesRef.current
       const nextSignature = createGraphSignature(nextNodes, nextEdges)
 
       if (nextSignature === persistedSignatureRef.current) {
         if (!isPersistingRef.current) {
-          setSaveStatus("saved")
-          setSaveError(null)
+          setSaveStatusSafe("saved")
+          setSaveErrorSafe(null)
+        }
+        shouldPersistAgainRef.current = false
+        return
+      }
+
+      if (isPersistingRef.current) {
+        shouldPersistAgainRef.current = true
+        return
+      }
+
+      isPersistingRef.current = true
+      setSaveStatusSafe("saving")
+      setSaveErrorSafe(null)
+
+      let didFail = false
+      let lockEditing = false
+      const saveSession = editorSessionRef.current
+
+      try {
+        await saveMapEditorGraphById(mapId, nextNodes, nextEdges)
+
+        if (saveSession !== editorSessionRef.current) {
+          return
+        }
+
+        persistedSignatureRef.current = nextSignature
+        pendingRemoteGraphRef.current = null
+        setHasRemoteUpdateAvailableSafe(false)
+        setLastEditedSafe(new Date().toISOString())
+
+        const latestAfterSave = createGraphSignature(
+          latestNodesRef.current,
+          latestEdgesRef.current
+        )
+
+        if (latestAfterSave === nextSignature) {
+          setSaveStatusSafe("saved")
+          setSaveErrorSafe(null)
+          shouldPersistAgainRef.current = false
+        } else {
+          setSaveStatusSafe("dirty")
+          shouldPersistAgainRef.current = true
+        }
+      } catch (error) {
+        if (saveSession !== editorSessionRef.current) {
+          return
+        }
+
+        didFail = true
+        setSaveStatusSafe("error")
+        setSaveErrorSafe(toSaveErrorMessage(error))
+        shouldPersistAgainRef.current = false
+
+        if (isPermissionLockError(error)) {
+          lockEditing = true
+          setIsEditLocked(true)
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current)
+            saveTimerRef.current = null
+          }
+        }
+      } finally {
+        const hasSameSession = saveSession === editorSessionRef.current
+        isPersistingRef.current = false
+
+        if (
+          hasSameSession &&
+          shouldPersistAgainRef.current &&
+          !didFail &&
+          !lockEditing
+        ) {
+          shouldPersistAgainRef.current = false
+          void persistLatestGraph(saveSession)
+        }
+      }
+    },
+    [
+      mapId,
+      setHasRemoteUpdateAvailableSafe,
+      setLastEditedSafe,
+      setSaveErrorSafe,
+      setSaveStatusSafe,
+    ]
+  )
+
+  const queuePersist = useCallback(
+    (nextNodes: MapEditorNode[], nextEdges: MapEditorEdge[]) => {
+      if (!canEditRef.current || !isHydratedRef.current) {
+        return
+      }
+
+      latestNodesRef.current = nextNodes
+      latestEdgesRef.current = nextEdges
+
+      const nextSignature = createGraphSignature(nextNodes, nextEdges)
+
+      if (nextSignature === persistedSignatureRef.current) {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = null
+        }
+
+        if (!isPersistingRef.current) {
+          setSaveStatusSafe("saved")
+          setSaveErrorSafe(null)
         }
         return
       }
 
-      setSaveStatus((currentStatus) =>
+      setSaveStatusSafe((currentStatus) =>
         currentStatus === "saving" ? currentStatus : "dirty"
       )
-      setSaveError((currentError) => (currentError ? null : currentError))
+      setSaveErrorSafe(null)
 
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current)
       }
 
+      const scheduleSession = editorSessionRef.current
       saveTimerRef.current = setTimeout(() => {
         saveTimerRef.current = null
-        void persistLatestGraph()
+        void persistLatestGraph(scheduleSession)
       }, SAVE_DEBOUNCE_MS)
     },
-    [canEdit, persistLatestGraph]
+    [persistLatestGraph, setSaveErrorSafe, setSaveStatusSafe]
   )
+
+  const retrySave = useCallback(() => {
+    if (!canEdit || !isHydratedRef.current) {
+      return
+    }
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    shouldPersistAgainRef.current = false
+    void persistLatestGraph(editorSessionRef.current)
+  }, [canEdit, persistLatestGraph])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!canEditRef.current || !isHydratedRef.current) {
+        return
+      }
+
+      const currentSignature = createGraphSignature(
+        latestNodesRef.current,
+        latestEdgesRef.current
+      )
+      const hasPendingChanges =
+        currentSignature !== persistedSignatureRef.current ||
+        Boolean(saveTimerRef.current) ||
+        isPersistingRef.current
+
+      if (!hasPendingChanges) {
+        return
+      }
+
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -190,29 +770,72 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
         clearTimeout(saveTimerRef.current)
         saveTimerRef.current = null
       }
+
+      if (!canEditRef.current || !isHydratedRef.current || isPersistingRef.current) {
+        return
+      }
+
+      const nextNodes = latestNodesRef.current
+      const nextEdges = latestEdgesRef.current
+      const nextSignature = createGraphSignature(nextNodes, nextEdges)
+
+      if (nextSignature === persistedSignatureRef.current) {
+        return
+      }
+
+      const cleanupSession = editorSessionRef.current
+
+      // Best-effort flush for route transitions with pending debounced changes.
+      void saveMapEditorGraphById(mapId, nextNodes, nextEdges)
+        .then(() => {
+          if (cleanupSession === editorSessionRef.current) {
+            persistedSignatureRef.current = nextSignature
+          }
+        })
+        .catch(() => undefined)
     }
-  }, [])
+  }, [mapId])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      const appliedChanges = canEdit ? changes : filterReadOnlyNodeChanges(changes)
+
+      if (appliedChanges.length === 0) {
+        return
+      }
+
       setNodes((currentNodes) => {
-        const nextNodes = applyNodeChanges(changes, currentNodes)
-        queuePersist(nextNodes, latestEdgesRef.current)
+        const nextNodes = applyNodeChanges(appliedChanges, currentNodes)
+
+        if (canEdit && hasPersistableNodeChanges(appliedChanges)) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
         return nextNodes
       })
     },
-    [queuePersist]
+    [canEdit, queuePersist]
   )
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      const appliedChanges = canEdit ? changes : filterReadOnlyEdgeChanges(changes)
+
+      if (appliedChanges.length === 0) {
+        return
+      }
+
       setEdges((currentEdges) => {
-        const nextEdges = applyEdgeChanges(changes, currentEdges)
-        queuePersist(latestNodesRef.current, nextEdges)
+        const nextEdges = applyEdgeChanges(appliedChanges, currentEdges)
+
+        if (canEdit && hasPersistableEdgeChanges(appliedChanges)) {
+          queuePersist(latestNodesRef.current, nextEdges)
+        }
+
         return nextEdges
       })
     },
-    [queuePersist]
+    [canEdit, queuePersist]
   )
 
   const handleConnect = useCallback(
@@ -281,6 +904,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     )
     setSelectedNodeId(null)
     setSelectedEdgeId(null)
+    selectedNodeIdRef.current = null
+    selectedEdgeIdRef.current = null
   }, [])
 
   const selectNode = useCallback(
@@ -318,6 +943,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       )
       setSelectedNodeId(nodeId)
       setSelectedEdgeId(null)
+      selectedNodeIdRef.current = nodeId
+      selectedEdgeIdRef.current = null
     },
     [clearSelection]
   )
@@ -327,12 +954,29 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     if (nextNodeId) {
       setSelectedNodeId(nextNodeId)
       setSelectedEdgeId(null)
+      selectedNodeIdRef.current = nextNodeId
+      selectedEdgeIdRef.current = null
       return
     }
 
     setSelectedNodeId(null)
-    setSelectedEdgeId(selection.edges[0]?.id ?? null)
+    const nextEdgeId = selection.edges[0]?.id ?? null
+    setSelectedEdgeId(nextEdgeId)
+    selectedNodeIdRef.current = null
+    selectedEdgeIdRef.current = nextEdgeId
   }, [])
+
+  useEffect(() => {
+    if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(null)
+      selectedNodeIdRef.current = null
+    }
+
+    if (selectedEdgeId && !edges.some((edge) => edge.id === selectedEdgeId)) {
+      setSelectedEdgeId(null)
+      selectedEdgeIdRef.current = null
+    }
+  }, [edges, nodes, selectedEdgeId, selectedNodeId])
 
   const selectedNode = useMemo<SelectedNodeSummary | null>(() => {
     if (!selectedNodeId) {
@@ -386,11 +1030,20 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       }
 
       setNodes((currentNodes) => {
+        let didUpdate = false
+
         const nextNodes = currentNodes.map((node) => {
           if (node.id !== selectedNodeId) {
             return node
           }
 
+          const currentTitle =
+            typeof node.data?.title === "string" ? node.data.title : ""
+          if (currentTitle === nextTitle) {
+            return node
+          }
+
+          didUpdate = true
           return {
             ...node,
             data: {
@@ -399,7 +1052,11 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
             },
           }
         })
-        queuePersist(nextNodes, latestEdgesRef.current)
+
+        if (didUpdate) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
         return nextNodes
       })
     },
@@ -418,11 +1075,21 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       latestEdgesRef.current.filter((edge) => edge.selected).map((edge) => edge.id)
     )
 
+    if (selectedNodeId) {
+      nodeIdsToDelete.add(selectedNodeId)
+    }
+
+    if (selectedEdgeId) {
+      edgeIdsToDelete.add(selectedEdgeId)
+    }
+
     if (nodeIdsToDelete.size === 0 && edgeIdsToDelete.size === 0) {
       return
     }
 
-    const nextNodes = latestNodesRef.current.filter((node) => !nodeIdsToDelete.has(node.id))
+    const nextNodes = latestNodesRef.current.filter(
+      (node) => !nodeIdsToDelete.has(node.id)
+    )
     const nextEdges = latestEdgesRef.current.filter((edge) => {
       if (edge.id && edgeIdsToDelete.has(edge.id)) {
         return false
@@ -435,14 +1102,16 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     setEdges(nextEdges)
     setSelectedNodeId(null)
     setSelectedEdgeId(null)
+    selectedNodeIdRef.current = null
+    selectedEdgeIdRef.current = null
     queuePersist(nextNodes, nextEdges)
-  }, [canEdit, queuePersist])
+  }, [canEdit, queuePersist, selectedEdgeId, selectedNodeId])
 
   const retryLoad = useCallback(() => {
     void graphQuery.refetch()
   }, [graphQuery])
 
-  const hasSelection = Boolean(selectedNodeId || selectedEdgeId)
+  const hasSelection = Boolean(selectedNode || selectedEdge)
   const nodeCount = nodes.length
 
   return {
@@ -455,17 +1124,23 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     handleEdgesChange,
     handleNodesChange,
     handleSelectionChange,
+    hasRemoteUpdateAvailable,
     hasSelection,
     isLoading: graphQuery.isLoading,
+    lastEdited,
     loadError: graphQuery.error instanceof Error ? graphQuery.error.message : null,
     nodes,
     nodeCount,
+    reloadFromRemote,
     retryLoad,
+    retrySave,
     saveError,
     saveStatus,
     selectNode,
     selectedEdge,
     selectedNode,
+    syncError,
+    syncStatus,
     updateSelectedNodeTitle,
   }
 }

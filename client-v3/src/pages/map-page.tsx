@@ -79,5 +79,5 @@ export function MapPage() {
     )
   }
 
-  return <MapWorkspaceShell map={mapWorkspaceQuery.data} />
+  return <MapWorkspaceShell currentUser={user} map={mapWorkspaceQuery.data} />
 }

@@ -31,6 +31,23 @@ function asNonEmptyString(value: unknown) {
   return normalized.length > 0 ? normalized : null
 }
 
+function ensureUniqueId(candidate: string, usedIds: Set<string>) {
+  if (!usedIds.has(candidate)) {
+    usedIds.add(candidate)
+    return candidate
+  }
+
+  let suffix = 2
+  let nextCandidate = `${candidate}-${suffix}`
+  while (usedIds.has(nextCandidate)) {
+    suffix += 1
+    nextCandidate = `${candidate}-${suffix}`
+  }
+
+  usedIds.add(nextCandidate)
+  return nextCandidate
+}
+
 function removeUndefinedDeep(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(removeUndefinedDeep)
@@ -92,11 +109,7 @@ export function normalizeLoadedNodes(rawNodes: unknown): MapEditorNode[] {
     const rawRecord = isRecord(rawNode) ? rawNode : {}
     const rawData = isRecord(rawRecord.data) ? rawRecord.data : {}
 
-    let id = asNonEmptyString(rawRecord.id) ?? fallbackId
-    if (usedIds.has(id)) {
-      id = `${id}-${index + 1}`
-    }
-    usedIds.add(id)
+    const id = ensureUniqueId(asNonEmptyString(rawRecord.id) ?? fallbackId, usedIds)
 
     const positionRecord = isRecord(rawRecord.position) ? rawRecord.position : {}
     const position = {
@@ -123,6 +136,7 @@ export function normalizeLoadedNodes(rawNodes: unknown): MapEditorNode[] {
 
 export function normalizeLoadedEdges(rawEdges: unknown): MapEditorEdge[] {
   const sourceEdges = Array.isArray(rawEdges) ? rawEdges : []
+  const usedIds = new Set<string>()
 
   return sourceEdges.flatMap((rawEdge, index) => {
     const rawRecord = isRecord(rawEdge) ? rawEdge : null
@@ -136,15 +150,28 @@ export function normalizeLoadedEdges(rawEdges: unknown): MapEditorEdge[] {
       return []
     }
 
+    const rawId = asNonEmptyString(rawRecord.id) ?? `edge-${source}-${target}-${index + 1}`
+    const id = ensureUniqueId(rawId, usedIds)
+
     return [
       {
         ...(rawRecord as Partial<MapEditorEdge>),
-        id: asNonEmptyString(rawRecord.id) ?? `edge-${source}-${target}-${index + 1}`,
+        id,
         source,
         target,
       },
     ]
   })
+}
+
+export function filterEdgesByExistingNodes(
+  edges: MapEditorEdge[],
+  nodes: MapEditorNode[]
+) {
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  return edges.filter(
+    (edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)
+  )
 }
 
 function serializeNode(node: MapEditorNode) {
@@ -176,8 +203,10 @@ function serializeEdge(edge: MapEditorEdge) {
 }
 
 export function toPersistedGraph(nodes: MapEditorNode[], edges: MapEditorEdge[]) {
+  const sanitizedEdges = filterEdgesByExistingNodes(edges, nodes)
+
   return {
-    edges: edges.map(serializeEdge),
+    edges: sanitizedEdges.map(serializeEdge),
     nodes: nodes.map(serializeNode),
   }
 }
@@ -221,10 +250,16 @@ export function createNewNode(
 ): MapEditorNode {
   const nextIndex = nodes.length
   const id = createNodeId(nodes)
-  const nextPosition = position ?? {
+  const fallbackPosition = {
     x: 140 + (nextIndex % 4) * 220,
     y: 140 + Math.floor(nextIndex / 4) * 140,
   }
+  const nextPosition = position
+    ? {
+        x: asFiniteNumber(position.x, fallbackPosition.x),
+        y: asFiniteNumber(position.y, fallbackPosition.y),
+      }
+    : fallbackPosition
 
   return {
     data: { title: `Node ${id}` },
