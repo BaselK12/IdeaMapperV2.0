@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react"
 import { Sparkles } from "lucide-react"
 import ReactFlow, {
   Background,
@@ -10,6 +17,7 @@ import ReactFlow, {
   type NodeChange,
   type OnSelectionChangeParams,
   type ReactFlowInstance,
+  type Viewport,
   type XYPosition,
 } from "reactflow"
 import "reactflow/dist/style.css"
@@ -43,6 +51,23 @@ export type MapEditorCanvasFocusRequest = {
   requestKey: number
 }
 
+export type MapEditorRemoteCursor = {
+  color: string
+  userId: string
+  username: string
+  x: number
+  y: number
+}
+
+export type MapEditorRemoteNodeDrag = {
+  color: string
+  nodeId: string
+  userId: string
+  username: string
+  x: number
+  y: number
+}
+
 type MapEditorCanvasProps = {
   canEdit: boolean
   edges: MapEditorEdge[]
@@ -57,8 +82,54 @@ type MapEditorCanvasProps = {
   onDeleteSelection: () => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onNodesChange: (changes: NodeChange[]) => void
+  onCursorPositionChange?: (position: XYPosition) => void
+  onNodeDragEnd?: (nodeId: string) => void
+  onNodeDragPositionChange?: (nodeId: string, position: XYPosition) => void
   onRetryLoad: () => void
   onSelectionChange: (selection: OnSelectionChangeParams) => void
+  remoteCursors?: MapEditorRemoteCursor[]
+  remoteNodeDrags?: MapEditorRemoteNodeDrag[]
+}
+
+type RenderedRemoteNodeDragBadge = {
+  color: string
+  left: number
+  nodeId: string
+  top: number
+  userId: string
+  username: string
+}
+
+function compactCursorName(username: string) {
+  const normalizedUsername = username.trim()
+  if (!normalizedUsername) {
+    return "Member"
+  }
+
+  if (normalizedUsername.length <= 20) {
+    return normalizedUsername
+  }
+
+  return `${normalizedUsername.slice(0, 19)}...`
+}
+
+function cursorInitials(username: string) {
+  const parts = username
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+
+  if (parts.length === 0) {
+    return "M"
+  }
+
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("")
+}
+
+function remoteNodeBadgeCopy(username: string) {
+  const name = compactCursorName(username)
+  return `${name} moving`
 }
 
 export function MapEditorCanvas({
@@ -75,16 +146,72 @@ export function MapEditorCanvas({
   onDeleteSelection,
   onEdgesChange,
   onNodesChange,
+  onCursorPositionChange,
+  onNodeDragEnd,
+  onNodeDragPositionChange,
   onRetryLoad,
   onSelectionChange,
+  remoteCursors = [],
+  remoteNodeDrags = [],
 }: MapEditorCanvasProps) {
   const flowContainerRef = useRef<HTMLDivElement | null>(null)
   const reactFlowRef = useRef<ReactFlowInstance | null>(null)
   const hasInitialFitRef = useRef(false)
+  const [viewport, setViewport] = useState<Viewport>({
+    x: 0,
+    y: 0,
+    zoom: 1,
+  })
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowRef.current = instance
+    setViewport(instance.getViewport())
   }, [])
+
+  const handleViewportMove = useCallback(
+    (_event: MouseEvent | TouchEvent | null, nextViewport: Viewport) => {
+      setViewport(nextViewport)
+    },
+    []
+  )
+
+  const handleCanvasPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!event.isPrimary || !onCursorPositionChange || !reactFlowRef.current) {
+        return
+      }
+
+      const nextPosition = reactFlowRef.current.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      })
+
+      onCursorPositionChange(nextPosition)
+    },
+    [onCursorPositionChange]
+  )
+
+  const handleNodeDrag = useCallback(
+    (node: MapEditorFlowNode) => {
+      if (!canEdit || !onNodeDragPositionChange) {
+        return
+      }
+
+      onNodeDragPositionChange(node.id, node.position)
+    },
+    [canEdit, onNodeDragPositionChange]
+  )
+
+  const handleNodeDragStop = useCallback(
+    (node: MapEditorFlowNode) => {
+      if (!onNodeDragEnd) {
+        return
+      }
+
+      onNodeDragEnd(node.id)
+    },
+    [onNodeDragEnd]
+  )
 
   const handleAddNode = useCallback(() => {
     if (!canEdit) {
@@ -199,6 +326,89 @@ export function MapEditorCanvas({
     [edges]
   )
 
+  const remoteNodeDragById = useMemo(() => {
+    const nextRemoteNodeDragById = new Map<string, MapEditorRemoteNodeDrag>()
+
+    for (const remoteNodeDrag of remoteNodeDrags) {
+      nextRemoteNodeDragById.set(remoteNodeDrag.nodeId, remoteNodeDrag)
+    }
+
+    return nextRemoteNodeDragById
+  }, [remoteNodeDrags])
+
+  const renderedNodes = useMemo(() => {
+    if (remoteNodeDragById.size === 0) {
+      return nodes
+    }
+
+    return nodes.map((node) => {
+      const remoteNodeDrag = remoteNodeDragById.get(node.id)
+      if (!remoteNodeDrag) {
+        return node
+      }
+
+      if (
+        node.position.x === remoteNodeDrag.x &&
+        node.position.y === remoteNodeDrag.y
+      ) {
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            boxShadow: `0 0 0 2px ${remoteNodeDrag.color}66, 0 8px 20px rgba(15, 23, 42, 0.18)`,
+          },
+        }
+      }
+
+      return {
+        ...node,
+        position: {
+          x: remoteNodeDrag.x,
+          y: remoteNodeDrag.y,
+        },
+        style: {
+          ...node.style,
+          boxShadow: `0 0 0 2px ${remoteNodeDrag.color}66, 0 8px 20px rgba(15, 23, 42, 0.18)`,
+        },
+      }
+    })
+  }, [nodes, remoteNodeDragById])
+
+  const renderedRemoteNodeDragBadges = useMemo(() => {
+    const nextBadges: RenderedRemoteNodeDragBadge[] = []
+
+    for (const remoteNodeDrag of remoteNodeDrags) {
+      const draggedNode = renderedNodes.find((node) => node.id === remoteNodeDrag.nodeId)
+      if (!draggedNode) {
+        continue
+      }
+
+      const nodeWidth = typeof draggedNode.width === "number" ? draggedNode.width : 180
+      nextBadges.push({
+        color: remoteNodeDrag.color,
+        left: (remoteNodeDrag.x + nodeWidth / 2) * viewport.zoom + viewport.x,
+        nodeId: remoteNodeDrag.nodeId,
+        top: remoteNodeDrag.y * viewport.zoom + viewport.y,
+        userId: remoteNodeDrag.userId,
+        username: remoteNodeDrag.username,
+      })
+    }
+
+    return nextBadges
+  }, [remoteNodeDrags, renderedNodes, viewport.x, viewport.y, viewport.zoom])
+
+  const renderedRemoteCursors = useMemo(
+    () =>
+      remoteCursors.map((cursor) => ({
+        ...cursor,
+        compactName: compactCursorName(cursor.username),
+        initials: cursorInitials(cursor.username),
+        left: cursor.x * viewport.zoom + viewport.x,
+        top: cursor.y * viewport.zoom + viewport.y,
+      })),
+    [remoteCursors, viewport.x, viewport.y, viewport.zoom]
+  )
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center rounded-xl border border-border/70 bg-card/65">
@@ -242,7 +452,11 @@ export function MapEditorCanvas({
         ) : null}
       </div>
 
-      <div className="h-full w-full" ref={flowContainerRef}>
+      <div
+        className="h-full w-full"
+        onPointerMove={handleCanvasPointerMove}
+        ref={flowContainerRef}
+      >
         <ReactFlow
           defaultEdgeOptions={{
             markerEnd: {
@@ -260,12 +474,17 @@ export function MapEditorCanvas({
           edgesUpdatable={canEdit}
           elementsSelectable
           nodeTypes={nodeTypes}
-          nodes={nodes}
+          nodes={renderedNodes}
           nodesConnectable={canEdit}
           nodesDraggable={canEdit}
           onConnect={onConnect}
           onEdgesChange={onEdgesChange}
           onInit={handleFlowInit}
+          onMove={handleViewportMove}
+          onNodeDrag={(_event, node) => handleNodeDrag(node as MapEditorFlowNode)}
+          onNodeDragStop={(_event, node) =>
+            handleNodeDragStop(node as MapEditorFlowNode)
+          }
           onNodesChange={onNodesChange}
           onPaneClick={onClearSelection}
           onSelectionChange={onSelectionChange}
@@ -284,6 +503,72 @@ export function MapEditorCanvas({
           <Background color="hsl(var(--border) / 0.5)" gap={22} size={1} />
         </ReactFlow>
       </div>
+
+      {renderedRemoteNodeDragBadges.map((remoteNodeDrag) => (
+        <div
+          className="pointer-events-none absolute z-[28]"
+          key={`drag-${remoteNodeDrag.nodeId}-${remoteNodeDrag.userId}`}
+          style={{
+            left: remoteNodeDrag.left,
+            top: remoteNodeDrag.top,
+            transform: "translate(-50%, calc(-100% - 8px))",
+          }}
+        >
+          <div
+            className="inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border bg-card/95 px-2 py-1 text-[11px] font-medium text-foreground shadow-sm"
+            style={{ borderColor: `${remoteNodeDrag.color}66` }}
+          >
+            <span
+              className="inline-flex size-2 rounded-full"
+              style={{ backgroundColor: remoteNodeDrag.color }}
+            />
+            <span className="truncate">
+              {remoteNodeBadgeCopy(remoteNodeDrag.username)}
+            </span>
+          </div>
+        </div>
+      ))}
+
+      {renderedRemoteCursors.map((cursor) => (
+        <div
+          className="pointer-events-none absolute z-30"
+          key={cursor.userId}
+          style={{
+            left: cursor.left,
+            top: cursor.top,
+            transform: "translate(-4px, -4px)",
+          }}
+        >
+          <svg
+            aria-hidden
+            className="size-5 drop-shadow-[0_1px_1px_rgba(15,23,42,0.45)]"
+            style={{ color: cursor.color }}
+            viewBox="0 0 20 20"
+          >
+            <path
+              d="M4 2.5v14l4.2-3.2 2.8 5.2 2.5-1.3-2.9-5.1h5.4z"
+              fill="currentColor"
+            />
+            <path
+              d="M4 2.5v14l4.2-3.2 2.8 5.2 2.5-1.3-2.9-5.1h5.4z"
+              fill="none"
+              stroke="hsl(var(--background))"
+              strokeLinejoin="round"
+              strokeWidth="1"
+            />
+          </svg>
+
+          <div className="mt-1 inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border border-border/70 bg-card/95 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm">
+            <span
+              className="inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+              style={{ backgroundColor: cursor.color }}
+            >
+              {cursor.initials}
+            </span>
+            <span className="truncate">{cursor.compactName}</span>
+          </div>
+        </div>
+      ))}
 
       {nodes.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">

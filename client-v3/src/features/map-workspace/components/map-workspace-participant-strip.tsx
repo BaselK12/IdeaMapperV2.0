@@ -13,7 +13,9 @@ type MapWorkspaceParticipantStripProps = {
   participants: MapWorkspaceParticipant[]
 }
 
-const MAX_VISIBLE_PARTICIPANTS = 6
+const DEFAULT_VISIBLE_PARTICIPANTS = 6
+const COMPACT_VISIBLE_PARTICIPANTS = 8
+const COMPACT_THRESHOLD = 5
 
 function roleBadgeClassName(role: string) {
   const normalizedRole = role.trim().toLowerCase()
@@ -56,7 +58,7 @@ function presenceCopy(presence: MapWorkspaceParticipantPresence) {
     return "Offline"
   }
 
-  return "Unknown"
+  return "Unknown status"
 }
 
 function presenceDotClassName(presence: MapWorkspaceParticipantPresence) {
@@ -92,13 +94,24 @@ export function MapWorkspaceParticipantStrip({
   onRetry,
   participants,
 }: MapWorkspaceParticipantStripProps) {
-  const visibleParticipants = participants.slice(0, MAX_VISIBLE_PARTICIPANTS)
+  const isCompact = participants.length >= COMPACT_THRESHOLD
+  const maxVisibleParticipants = isCompact
+    ? COMPACT_VISIBLE_PARTICIPANTS
+    : DEFAULT_VISIBLE_PARTICIPANTS
+  const visibleParticipants = participants.slice(0, maxVisibleParticipants)
+  const hiddenParticipants = participants.slice(visibleParticipants.length)
   const hiddenParticipantsCount = Math.max(
     0,
-    participants.length - visibleParticipants.length
+    participants.length - maxVisibleParticipants
   )
   const onlineCount = participants.filter(
     (participant) => participant.presence === "online"
+  ).length
+  const offlineCount = participants.filter(
+    (participant) => participant.presence === "offline"
+  ).length
+  const unknownCount = participants.filter(
+    (participant) => participant.presence === "unknown"
   ).length
   const currentUserParticipant = participants.find(
     (participant) => participant.isCurrentUser
@@ -111,6 +124,9 @@ export function MapWorkspaceParticipantStrip({
     !isPresenceUnavailable &&
     currentUserParticipant?.presence === "online" &&
     onlineOthersCount === 0
+  const hiddenParticipantsTitle = hiddenParticipants
+    .map((participant) => `${participant.displayName} (${presenceCopy(participant.presence)})`)
+    .join(" • ")
 
   return (
     <section className="rounded-xl border border-border/80 bg-background/85 px-3 py-2.5">
@@ -123,7 +139,8 @@ export function MapWorkspaceParticipantStrip({
             <span className="h-5 w-24 animate-pulse rounded-full bg-muted" />
           ) : (
             <span className="rounded-full border border-border/70 bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground">
-              {onlineCount} online • {participants.length} total
+              {onlineCount} online • {offlineCount} offline
+              {unknownCount > 0 ? ` • ${unknownCount} unknown` : ""}
             </span>
           )}
         </div>
@@ -170,6 +187,7 @@ export function MapWorkspaceParticipantStrip({
               <div
                 className={cn(
                   "inline-flex max-w-full items-center gap-2 rounded-full border px-2 py-1.5 text-xs",
+                  isCompact ? "pr-2" : "pr-2.5",
                   participant.isCurrentUser
                     ? "border-primary/30 bg-primary-soft/70"
                     : "border-border/80 bg-card/85"
@@ -179,18 +197,24 @@ export function MapWorkspaceParticipantStrip({
                 <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-[10px] font-semibold uppercase text-foreground">
                   {initialsFromName(participant.displayName)}
                 </span>
-                <span className="truncate text-foreground">
-                  {participant.displayName}
-                  {participant.isCurrentUser ? " (You)" : ""}
+                <span className="inline-flex max-w-[8rem] items-center gap-1.5 text-foreground">
+                  <span className="truncate">{participant.displayName}</span>
+                  {participant.isCurrentUser ? (
+                    <span className="rounded-full border border-primary/30 bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      You
+                    </span>
+                  ) : null}
                 </span>
-                <span
-                  className={cn(
-                    "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
-                    roleBadgeClassName(participant.role)
-                  )}
-                >
-                  {formatRole(participant.role)}
-                </span>
+                {!isCompact || participant.isCurrentUser ? (
+                  <span
+                    className={cn(
+                      "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                      roleBadgeClassName(participant.role)
+                    )}
+                  >
+                    {formatRole(participant.role)}
+                  </span>
+                ) : null}
                 <span
                   className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
                   title={presenceCopy(participant.presence)}
@@ -201,13 +225,18 @@ export function MapWorkspaceParticipantStrip({
                       presenceDotClassName(participant.presence)
                     )}
                   />
-                  {presenceCopy(participant.presence)}
+                  <span className={cn(isCompact && !participant.isCurrentUser ? "hidden sm:inline" : "")}>
+                    {presenceCopy(participant.presence)}
+                  </span>
                 </span>
               </div>
             ))}
 
             {hiddenParticipantsCount > 0 ? (
-              <span className="rounded-full border border-border/80 bg-card/80 px-2 py-1 text-xs text-muted-foreground">
+              <span
+                className="rounded-full border border-border/80 bg-card/80 px-2 py-1 text-xs text-muted-foreground"
+                title={hiddenParticipantsTitle}
+              >
                 +{hiddenParticipantsCount} more
               </span>
             ) : null}

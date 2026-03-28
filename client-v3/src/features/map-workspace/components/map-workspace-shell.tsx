@@ -26,6 +26,10 @@ import type {
 } from "@/features/map-editor/types/map-editor-types"
 import { getNodeTitleFromValue } from "@/features/map-editor/utils/map-editor-graph"
 import { MapWorkspaceParticipantStrip } from "@/features/map-workspace/components/map-workspace-participant-strip"
+import {
+  useMapWorkspaceLiveCursors,
+  type MapWorkspaceRealtimeStatus,
+} from "@/features/map-workspace/hooks/use-map-workspace-live-cursors"
 import { useMapWorkspacePresence } from "@/features/map-workspace/hooks/use-map-workspace-presence"
 import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-types"
 import { cn } from "@/lib/utils"
@@ -38,6 +42,11 @@ type MapWorkspaceShellProps = {
 type NavigatorItem = {
   id: string
   title: string
+}
+
+type StatusPill = {
+  className: string
+  label: string
 }
 
 function formatRole(role: string) {
@@ -87,76 +96,85 @@ function shortId(value: string) {
   return `${value.slice(0, 8)}...${value.slice(-4)}`
 }
 
-function saveStatusCopy(status: MapEditorSaveStatus, canEdit: boolean) {
+function saveStatusPill(status: MapEditorSaveStatus, canEdit: boolean): StatusPill {
   if (status === "error") {
-    return "Save failed"
+    return {
+      className: "border-destructive/35 bg-destructive/10 text-destructive",
+      label: "Save failed",
+    }
   }
 
   if (!canEdit) {
-    return "Read-only"
+    return {
+      className: "border-border/80 bg-background/90 text-muted-foreground",
+      label: "View only",
+    }
   }
 
   if (status === "dirty") {
-    return "Unsaved changes"
+    return {
+      className: "border-orange-300/70 bg-orange-100 text-orange-700",
+      label: "Unsaved edits",
+    }
   }
 
   if (status === "saving") {
-    return "Saving..."
+    return {
+      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      label: "Saving...",
+    }
   }
 
   if (status === "saved") {
-    return "All changes saved"
+    return {
+      className: "border-emerald-300/70 bg-emerald-100 text-emerald-700",
+      label: "Saved",
+    }
   }
 
-  return "Ready"
+  return {
+    className: "border-border/80 bg-background/90 text-muted-foreground",
+    label: "No local edits",
+  }
 }
 
-function saveStatusClassName(status: MapEditorSaveStatus, canEdit: boolean) {
+function syncStatusPill(status: MapEditorSyncStatus): StatusPill {
   if (status === "error") {
-    return "border-destructive/35 bg-destructive/10 text-destructive"
-  }
-
-  if (!canEdit) {
-    return "border-border/80 bg-background/90 text-muted-foreground"
-  }
-
-  if (status === "saved") {
-    return "border-emerald-300/70 bg-emerald-100 text-emerald-700"
-  }
-
-  if (status === "dirty") {
-    return "border-orange-300/70 bg-orange-100 text-orange-700"
-  }
-
-  if (status === "saving") {
-    return "border-amber-300/70 bg-amber-100 text-amber-700"
-  }
-
-  return "border-border/80 bg-background/90 text-muted-foreground"
-}
-
-function syncStatusCopy(status: MapEditorSyncStatus) {
-  if (status === "error") {
-    return "Sync error"
+    return {
+      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      label: "Realtime offline",
+    }
   }
 
   if (status === "connecting") {
-    return "Sync connecting"
+    return {
+      className: "border-sky-300/70 bg-sky-100 text-sky-700",
+      label: "Realtime reconnecting",
+    }
   }
 
-  return "Sync listening"
+  return {
+    className: "border-emerald-300/70 bg-emerald-100 text-emerald-700",
+    label: "Realtime live",
+  }
 }
 
-function syncStatusClassName(status: MapEditorSyncStatus) {
-  if (status === "error") {
-    return "border-destructive/35 bg-destructive/10 text-destructive"
+function liveCursorStatusPill(status: MapWorkspaceRealtimeStatus): StatusPill | null {
+  if (status === "offline") {
+    return {
+      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      label: "Cursors offline",
+    }
   }
 
   if (status === "connecting") {
-    return "border-amber-300/70 bg-amber-100 text-amber-700"
+    return {
+      className: "border-sky-300/70 bg-sky-100 text-sky-700",
+      label: "Cursors reconnecting",
+    }
   }
 
-  return "border-sky-300/70 bg-sky-100 text-sky-700"
+  return null
 }
 
 export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) {
@@ -171,8 +189,15 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     mapId: map.id,
     ownerId: map.ownerId,
   })
+  const liveCursors = useMapWorkspaceLiveCursors({
+    currentUser,
+    mapId: map.id,
+  })
   const isReadOnly = !editor.canEdit
   const mapLastEdited = editor.lastEdited ?? map.lastEdited
+  const savePill = saveStatusPill(editor.saveStatus, editor.canEdit)
+  const syncPill = syncStatusPill(editor.syncStatus)
+  const cursorPill = liveCursorStatusPill(liveCursors.realtimeStatus)
 
   const outlineItems = useMemo<NavigatorItem[]>(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase()
@@ -355,33 +380,39 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <span
                 className={cn(
                   "rounded-full border px-2.5 py-1",
-                  saveStatusClassName(editor.saveStatus, editor.canEdit)
+                  savePill.className
                 )}
               >
-                {saveStatusCopy(editor.saveStatus, editor.canEdit)}
+                {savePill.label}
               </span>
               <span
                 className={cn(
                   "rounded-full border px-2.5 py-1",
-                  syncStatusClassName(editor.syncStatus)
+                  syncPill.className
                 )}
               >
-                {syncStatusCopy(editor.syncStatus)}
+                {syncPill.label}
               </span>
+              {cursorPill ? (
+                <span className={cn("rounded-full border px-2.5 py-1", cursorPill.className)}>
+                  {cursorPill.label}
+                </span>
+              ) : null}
               {editor.hasRemoteUpdateAvailable ? (
                 <span className="rounded-full border border-orange-300/70 bg-orange-100 px-2.5 py-1 text-orange-700">
-                  Remote update available
+                  Newer saved version available
                 </span>
               ) : null}
             </div>
 
             {editor.hasRemoteUpdateAvailable ? (
-              <div className="mt-2 rounded-lg border border-orange-300/50 bg-orange-50 px-3 py-2">
+              <div className="mt-2 rounded-lg border border-orange-300/55 bg-orange-50 px-3 py-2">
                 <p className="text-xs font-medium text-orange-700">
-                  A newer saved version is available from another session.
+                  A newer saved version was published in another session.
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Save your local edits or reload to sync to the latest persisted graph.
+                  Your local unsaved edits are still safe in this tab. Save to keep them,
+                  or reload to replace them with the latest persisted graph.
                 </p>
                 <Button
                   className="mt-2 h-7 px-2.5 text-xs"
@@ -390,7 +421,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   size="sm"
                   variant="outline"
                 >
-                  Reload latest
+                  {editor.saveStatus === "saving" ? "Saving local edits..." : "Reload latest"}
                 </Button>
               </div>
             ) : null}
@@ -407,10 +438,32 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </div>
             ) : null}
 
+            {editor.selectionInvalidationNotice ? (
+              <div className="mt-2 rounded-lg border border-sky-300/50 bg-sky-50 px-3 py-2">
+                <p className="text-xs font-medium text-sky-800">Selection updated</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {editor.selectionInvalidationNotice}
+                </p>
+              </div>
+            ) : null}
+
             {editor.syncError ? (
               <div className="mt-2 rounded-lg border border-amber-300/45 bg-amber-50 px-3 py-2">
                 <p className="text-xs font-medium text-amber-700">Realtime sync issue</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{editor.syncError}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Local editing and save still work while realtime reconnects.
+                </p>
+              </div>
+            ) : null}
+
+            {liveCursors.realtimeStatus === "offline" ? (
+              <div className="mt-2 rounded-lg border border-amber-300/45 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium text-amber-700">Live cursors unavailable</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Cursor and drag previews are temporarily offline. Continue editing
+                  normally; they return automatically after reconnect.
+                </p>
               </div>
             ) : null}
 
@@ -429,8 +482,13 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                 onDeleteSelection={editor.deleteSelection}
                 onEdgesChange={editor.handleEdgesChange}
                 onNodesChange={editor.handleNodesChange}
+                onCursorPositionChange={liveCursors.sendCursorPosition}
+                onNodeDragEnd={liveCursors.endNodeDrag}
+                onNodeDragPositionChange={liveCursors.sendNodeDragPosition}
                 onRetryLoad={editor.retryLoad}
                 onSelectionChange={editor.handleSelectionChange}
+                remoteCursors={liveCursors.remoteCursors}
+                remoteNodeDrags={liveCursors.remoteNodeDrags}
               />
             </div>
           </div>

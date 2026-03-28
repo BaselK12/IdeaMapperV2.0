@@ -48,6 +48,7 @@ type UseMapEditorParams = {
 }
 
 const SAVE_DEBOUNCE_MS = 700
+const SELECTION_INVALIDATION_NOTICE_MS = 4800
 
 type ReconciledGraphSelection = {
   edges: MapEditorEdge[]
@@ -116,18 +117,46 @@ function toIsoStringOrNull(value: unknown) {
 
 function toSyncErrorMessage(status: string) {
   if (status === "CHANNEL_ERROR") {
-    return "Realtime sync connection failed."
+    return "Realtime sync connection failed. Trying to reconnect."
   }
 
   if (status === "TIMED_OUT") {
-    return "Realtime sync timed out."
+    return "Realtime sync timed out. Trying to reconnect."
   }
 
   if (status === "CLOSED") {
     return "Realtime sync disconnected."
   }
 
-  return "Realtime sync is unavailable."
+  return "Realtime sync is unavailable right now."
+}
+
+function toSelectionInvalidationMessage(params: {
+  nextSelectedEdgeId: string | null
+  nextSelectedNodeId: string | null
+  previousSelectedEdgeId: string | null
+  previousSelectedNodeId: string | null
+}) {
+  const {
+    nextSelectedEdgeId,
+    nextSelectedNodeId,
+    previousSelectedEdgeId,
+    previousSelectedNodeId,
+  } = params
+
+  if (previousSelectedNodeId && !nextSelectedNodeId) {
+    return "The selected node was removed in another session."
+  }
+
+  if (
+    previousSelectedEdgeId &&
+    !previousSelectedNodeId &&
+    !nextSelectedEdgeId
+  ) {
+    return "The selected connection was removed in another session."
+  }
+
+  return null
 }
 
 function reconcileSelection(
@@ -195,6 +224,9 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   const [syncStatus, setSyncStatus] = useState<MapEditorSyncStatus>("connecting")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [hasRemoteUpdateAvailable, setHasRemoteUpdateAvailable] = useState(false)
+  const [selectionInvalidationNotice, setSelectionInvalidationNotice] = useState<
+    string | null
+  >(null)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestNodesRef = useRef<MapEditorNode[]>([])
@@ -203,6 +235,9 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   const selectedEdgeIdRef = useRef<string | null>(null)
   const persistedSignatureRef = useRef("")
   const pendingRemoteGraphRef = useRef<RemoteGraphSnapshot | null>(null)
+  const selectionInvalidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
   const isHydratedRef = useRef(false)
   const isPersistingRef = useRef(false)
   const shouldPersistAgainRef = useRef(false)
@@ -284,6 +319,17 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     []
   )
 
+  const setSelectionInvalidationNoticeSafe = useCallback(
+    (nextValue: SetStateAction<string | null>) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
+      setSelectionInvalidationNotice(nextValue)
+    },
+    []
+  )
+
   useEffect(() => {
     canEditRef.current = canEdit
   }, [canEdit])
@@ -304,9 +350,43 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     selectedEdgeIdRef.current = selectedEdgeId
   }, [selectedEdgeId])
 
+  const clearSelectionInvalidationNotice = useCallback(() => {
+    if (selectionInvalidationTimerRef.current) {
+      clearTimeout(selectionInvalidationTimerRef.current)
+      selectionInvalidationTimerRef.current = null
+    }
+
+    setSelectionInvalidationNoticeSafe(null)
+  }, [setSelectionInvalidationNoticeSafe])
+
+  const publishSelectionInvalidationNotice = useCallback(
+    (message: string | null) => {
+      if (!message) {
+        clearSelectionInvalidationNotice()
+        return
+      }
+
+      if (selectionInvalidationTimerRef.current) {
+        clearTimeout(selectionInvalidationTimerRef.current)
+      }
+
+      setSelectionInvalidationNoticeSafe(message)
+      selectionInvalidationTimerRef.current = setTimeout(() => {
+        selectionInvalidationTimerRef.current = null
+        setSelectionInvalidationNoticeSafe(null)
+      }, SELECTION_INVALIDATION_NOTICE_MS)
+    },
+    [clearSelectionInvalidationNotice, setSelectionInvalidationNoticeSafe]
+  )
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false
+
+      if (selectionInvalidationTimerRef.current) {
+        clearTimeout(selectionInvalidationTimerRef.current)
+        selectionInvalidationTimerRef.current = null
+      }
     }
   }, [])
 
@@ -338,7 +418,9 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     setSyncStatusSafe("connecting")
     setSyncErrorSafe(null)
     setHasRemoteUpdateAvailableSafe(false)
+    clearSelectionInvalidationNotice()
   }, [
+    clearSelectionInvalidationNotice,
     mapId,
     setHasRemoteUpdateAvailableSafe,
     setLastEditedSafe,
@@ -367,6 +449,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     setSaveErrorSafe(null)
     setLastEditedSafe(graphQuery.data.lastEdited)
     setHasRemoteUpdateAvailableSafe(false)
+    clearSelectionInvalidationNotice()
     pendingRemoteGraphRef.current = null
 
     persistedSignatureRef.current = createGraphSignature(
@@ -383,6 +466,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     }
   }, [
     canEdit,
+    clearSelectionInvalidationNotice,
     graphQuery.data,
     setHasRemoteUpdateAvailableSafe,
     setLastEditedSafe,
@@ -436,12 +520,20 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
 
   const applyRemoteSnapshot = useCallback(
     (snapshot: RemoteGraphSnapshot) => {
+      const previousSelectedNodeId = selectedNodeIdRef.current
+      const previousSelectedEdgeId = selectedEdgeIdRef.current
       const nextGraph = reconcileSelection(
         snapshot.nodes,
         snapshot.edges,
-        selectedNodeIdRef.current,
-        selectedEdgeIdRef.current
+        previousSelectedNodeId,
+        previousSelectedEdgeId
       )
+      const selectionInvalidationMessage = toSelectionInvalidationMessage({
+        nextSelectedEdgeId: nextGraph.selectedEdgeId,
+        nextSelectedNodeId: nextGraph.selectedNodeId,
+        previousSelectedEdgeId,
+        previousSelectedNodeId,
+      })
 
       latestNodesRef.current = nextGraph.nodes
       latestEdgesRef.current = nextGraph.edges
@@ -465,8 +557,10 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       setSaveStatusSafe(canEditRef.current ? "saved" : "idle")
       setLastEditedSafe(snapshot.lastEdited)
       setHasRemoteUpdateAvailableSafe(false)
+      publishSelectionInvalidationNotice(selectionInvalidationMessage)
     },
     [
+      publishSelectionInvalidationNotice,
       setHasRemoteUpdateAvailableSafe,
       setLastEditedSafe,
       setSaveErrorSafe,
@@ -878,6 +972,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   )
 
   const clearSelection = useCallback(() => {
+    clearSelectionInvalidationNotice()
     setNodes((currentNodes) =>
       currentNodes.some((node) => node.selected)
         ? currentNodes.map((node) =>
@@ -906,10 +1001,11 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     setSelectedEdgeId(null)
     selectedNodeIdRef.current = null
     selectedEdgeIdRef.current = null
-  }, [])
+  }, [clearSelectionInvalidationNotice])
 
   const selectNode = useCallback(
     (nodeId: string) => {
+      clearSelectionInvalidationNotice()
       const hasNode = latestNodesRef.current.some((node) => node.id === nodeId)
       if (!hasNode) {
         clearSelection()
@@ -946,25 +1042,29 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       selectedNodeIdRef.current = nodeId
       selectedEdgeIdRef.current = null
     },
-    [clearSelection]
+    [clearSelection, clearSelectionInvalidationNotice]
   )
 
-  const handleSelectionChange = useCallback((selection: OnSelectionChangeParams) => {
-    const nextNodeId = selection.nodes[0]?.id ?? null
-    if (nextNodeId) {
-      setSelectedNodeId(nextNodeId)
-      setSelectedEdgeId(null)
-      selectedNodeIdRef.current = nextNodeId
-      selectedEdgeIdRef.current = null
-      return
-    }
+  const handleSelectionChange = useCallback(
+    (selection: OnSelectionChangeParams) => {
+      clearSelectionInvalidationNotice()
+      const nextNodeId = selection.nodes[0]?.id ?? null
+      if (nextNodeId) {
+        setSelectedNodeId(nextNodeId)
+        setSelectedEdgeId(null)
+        selectedNodeIdRef.current = nextNodeId
+        selectedEdgeIdRef.current = null
+        return
+      }
 
-    setSelectedNodeId(null)
-    const nextEdgeId = selection.edges[0]?.id ?? null
-    setSelectedEdgeId(nextEdgeId)
-    selectedNodeIdRef.current = null
-    selectedEdgeIdRef.current = nextEdgeId
-  }, [])
+      setSelectedNodeId(null)
+      const nextEdgeId = selection.edges[0]?.id ?? null
+      setSelectedEdgeId(nextEdgeId)
+      selectedNodeIdRef.current = null
+      selectedEdgeIdRef.current = nextEdgeId
+    },
+    [clearSelectionInvalidationNotice]
+  )
 
   useEffect(() => {
     if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) {
@@ -1068,6 +1168,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       return
     }
 
+    clearSelectionInvalidationNotice()
+
     const nodeIdsToDelete = new Set(
       latestNodesRef.current.filter((node) => node.selected).map((node) => node.id)
     )
@@ -1105,7 +1207,13 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     selectedNodeIdRef.current = null
     selectedEdgeIdRef.current = null
     queuePersist(nextNodes, nextEdges)
-  }, [canEdit, queuePersist, selectedEdgeId, selectedNodeId])
+  }, [
+    canEdit,
+    clearSelectionInvalidationNotice,
+    queuePersist,
+    selectedEdgeId,
+    selectedNodeId,
+  ])
 
   const retryLoad = useCallback(() => {
     void graphQuery.refetch()
@@ -1136,6 +1244,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     retrySave,
     saveError,
     saveStatus,
+    selectionInvalidationNotice,
     selectNode,
     selectedEdge,
     selectedNode,

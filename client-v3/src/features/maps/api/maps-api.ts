@@ -34,6 +34,10 @@ function isInvalidUuidError(error: { code?: string; message?: string } | null) {
   return error?.code === "22P02" || message.includes("invalid input syntax for type uuid")
 }
 
+function isMapLimitError(error: { code?: string; message?: string } | null) {
+  return (error?.message ?? "").startsWith("map_limit_reached")
+}
+
 function sortByLastEditedDesc(a: AccessibleMap, b: AccessibleMap) {
   const timeA = a.lastEdited ? Date.parse(a.lastEdited) : Number.NEGATIVE_INFINITY
   const timeB = b.lastEdited ? Date.parse(b.lastEdited) : Number.NEGATIVE_INFINITY
@@ -83,6 +87,9 @@ export async function createMap(payload: CreateMapPayload): Promise<string> {
   })
 
   if (error) {
+    if (isMapLimitError(error)) {
+      throw new Error("You have reached your map limit. Upgrade your plan to create more maps.")
+    }
     throw new Error(error.message || "Failed to create map.")
   }
 

@@ -277,5 +277,5 @@ export function createNewNode(
 
 export function toRoleCanEdit(role: string) {
   const normalized = role.trim().toLowerCase()
-  return normalized === "admin" || normalized === "editor" || normalized === "owner"
+  return normalized === "admin" || normalized === "editor"
 }
