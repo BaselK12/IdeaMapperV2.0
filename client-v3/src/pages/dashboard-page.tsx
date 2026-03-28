@@ -70,24 +70,30 @@ export function DashboardPage() {
   const createMapMutation = useCreateMapMutation(userId)
   const joinMapMutation = useJoinMapMutation(userId)
 
-  const maps = mapsQuery.data ?? []
+  const maps = mapsQuery.data
+  const accessibleMaps = maps ?? []
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
   const filteredMaps = useMemo(() => {
+    const sourceMaps = maps ?? []
+
     if (!normalizedSearchTerm) {
-      return maps
+      return sourceMaps
     }
 
-    return maps.filter((map) =>
+    return sourceMaps.filter((map) =>
       map.name.toLowerCase().includes(normalizedSearchTerm)
     )
   }, [maps, normalizedSearchTerm])
 
-  const hasNoMaps = !mapsQuery.isLoading && !mapsQuery.isError && maps.length === 0
+  const hasNoMaps =
+    !mapsQuery.isLoading &&
+    !mapsQuery.isError &&
+    accessibleMaps.length === 0
   const hasNoSearchResults =
     !mapsQuery.isLoading &&
     !mapsQuery.isError &&
-    maps.length > 0 &&
+    accessibleMaps.length > 0 &&
     filteredMaps.length === 0
 
   const openCreateModal = () => {
@@ -186,14 +192,14 @@ export function DashboardPage() {
       <Card className="animate-fade-up relative overflow-hidden border-border/70 bg-card/95 shadow-md">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/90 via-transparent to-background" />
         <div className="pointer-events-none absolute -right-20 top-6 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
-        <CardContent className="relative p-6 md:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
+        <CardContent className="relative p-5 md:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2.5">
               <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
                 <Sparkles className="size-3.5" />
                 Dashboard
               </p>
-              <h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                 Your Maps Workspace
               </h2>
               <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
@@ -217,15 +223,16 @@ export function DashboardPage() {
       </Card>
 
       <Card className="animate-fade-up border-border/70 bg-card/95 shadow-md">
-        <CardHeader className="gap-4 border-b border-border/70 pb-5">
+        <CardHeader className="flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col gap-1">
             <CardTitle className="text-base md:text-lg">Map Library</CardTitle>
             <p className="text-sm text-muted-foreground">
-              {maps.length} {maps.length === 1 ? "map" : "maps"} available to you
+              {accessibleMaps.length}{" "}
+              {accessibleMaps.length === 1 ? "map" : "maps"} available to you
             </p>
           </div>
 
-          <div className="relative max-w-xl">
+          <div className="relative w-full md:max-w-xl lg:max-w-2xl">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"

@@ -228,7 +228,7 @@ export function AuthCard({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          OAuth buttons are placeholders for this foundation.
+          OAuth sign-in is not enabled in this workspace yet.
         </p>
       </CardContent>
     </Card>

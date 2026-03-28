@@ -129,16 +129,16 @@ export function MapWorkspaceParticipantStrip({
     .join(" • ")
 
   return (
-    <section className="rounded-xl border border-border/80 bg-background/85 px-3 py-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+    <section className="rounded-xl border border-border/80 bg-background/85 px-3 py-2 md:px-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground md:text-[11px]">
             Participants
           </p>
           {isLoading ? (
-            <span className="h-5 w-24 animate-pulse rounded-full bg-muted" />
+            <span className="h-4.5 w-24 animate-pulse rounded-full bg-muted" />
           ) : (
-            <span className="rounded-full border border-border/70 bg-card/90 px-2 py-0.5 text-[11px] text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-card/90 px-1.5 py-0.5 text-[10px] text-muted-foreground md:text-[11px]">
               {onlineCount} online • {offlineCount} offline
               {unknownCount > 0 ? ` • ${unknownCount} unknown` : ""}
             </span>
@@ -146,23 +146,23 @@ export function MapWorkspaceParticipantStrip({
         </div>
 
         {isPresenceUnavailable ? (
-          <span className="rounded-full border border-amber-300/70 bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">
+          <span className="rounded-full border border-amber-300/70 bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700 md:text-[11px]">
             Presence delayed
           </span>
         ) : null}
       </div>
 
       {isLoading && participants.length === 0 ? (
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          <div className="h-8 w-44 animate-pulse rounded-full bg-muted/85" />
-          <div className="h-8 w-36 animate-pulse rounded-full bg-muted/70" />
-          <div className="h-8 w-28 animate-pulse rounded-full bg-muted/60" />
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="h-7 w-40 animate-pulse rounded-full bg-muted/85" />
+          <div className="h-7 w-32 animate-pulse rounded-full bg-muted/70" />
+          <div className="h-7 w-24 animate-pulse rounded-full bg-muted/60" />
         </div>
       ) : (
         <>
           {errorMessage ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-1.5">
-              <p className="text-xs text-amber-700">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-300/60 bg-amber-50 px-2.5 py-1.5">
+              <p className="text-[11px] text-amber-700">
                 Participant list may be out of date.
               </p>
               <Button
@@ -177,30 +177,30 @@ export function MapWorkspaceParticipantStrip({
           ) : null}
 
           {showOnlyYouMessage ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
               Only you are online right now.
             </p>
           ) : null}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {visibleParticipants.map((participant) => (
               <div
                 className={cn(
-                  "inline-flex max-w-full items-center gap-2 rounded-full border px-2 py-1.5 text-xs",
-                  isCompact ? "pr-2" : "pr-2.5",
+                  "inline-flex max-w-full items-center gap-1.5 rounded-full border px-1.5 py-1 text-[11px]",
+                  isCompact ? "pr-1.5" : "pr-2",
                   participant.isCurrentUser
                     ? "border-primary/30 bg-primary-soft/70"
                     : "border-border/80 bg-card/85"
                 )}
                 key={participant.id}
               >
-                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-[10px] font-semibold uppercase text-foreground">
+                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-[9px] font-semibold uppercase text-foreground">
                   {initialsFromName(participant.displayName)}
                 </span>
-                <span className="inline-flex max-w-[8rem] items-center gap-1.5 text-foreground">
+                <span className="inline-flex max-w-[7rem] items-center gap-1 text-foreground">
                   <span className="truncate">{participant.displayName}</span>
                   {participant.isCurrentUser ? (
-                    <span className="rounded-full border border-primary/30 bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="rounded-full border border-primary/30 bg-primary-soft px-1.5 py-0.5 text-[9px] font-medium text-primary">
                       You
                     </span>
                   ) : null}
@@ -208,7 +208,7 @@ export function MapWorkspaceParticipantStrip({
                 {!isCompact || participant.isCurrentUser ? (
                   <span
                     className={cn(
-                      "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                      "rounded-full border px-1.5 py-0.5 text-[9px] font-medium",
                       roleBadgeClassName(participant.role)
                     )}
                   >
@@ -216,7 +216,7 @@ export function MapWorkspaceParticipantStrip({
                   </span>
                 ) : null}
                 <span
-                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+                  className="inline-flex items-center gap-1 text-[9px] text-muted-foreground"
                   title={presenceCopy(participant.presence)}
                 >
                   <span
@@ -234,7 +234,7 @@ export function MapWorkspaceParticipantStrip({
 
             {hiddenParticipantsCount > 0 ? (
               <span
-                className="rounded-full border border-border/80 bg-card/80 px-2 py-1 text-xs text-muted-foreground"
+                className="rounded-full border border-border/80 bg-card/80 px-1.5 py-0.5 text-[11px] text-muted-foreground"
                 title={hiddenParticipantsTitle}
               >
                 +{hiddenParticipantsCount} more

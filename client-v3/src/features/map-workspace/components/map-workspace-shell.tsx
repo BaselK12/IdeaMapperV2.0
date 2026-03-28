@@ -236,8 +236,8 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
   return (
     <section className="animate-fade-up flex h-[calc(100vh-2rem)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-lg">
-      <header className="space-y-4 border-b border-border/70 px-4 py-4 md:px-6 md:py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="space-y-3 border-b border-border/70 px-4 py-3.5 md:px-5 md:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" variant="ghost">
               <Link to="/app">
@@ -247,7 +247,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             </Button>
             <span
               className={cn(
-                "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
                 roleClassName(map.role)
               )}
             >
@@ -255,27 +255,27 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button className="h-8 px-3 text-xs" size="sm" variant="outline">
               <Share2 className="size-4" />
               Share
             </Button>
-            <Button size="sm" variant="outline">
+            <Button className="h-8 px-3 text-xs" size="sm" variant="outline">
               <Download className="size-4" />
               Export
             </Button>
-            <Button size="sm" variant="outline">
+            <Button className="h-8 px-3 text-xs" size="sm" variant="outline">
               <MoreHorizontal className="size-4" />
               More
             </Button>
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[2rem]">
             {map.name}
           </h1>
-          <p className="line-clamp-2 text-sm text-muted-foreground md:text-base">
+          <p className="line-clamp-2 max-w-3xl text-sm text-muted-foreground md:text-[15px]">
             {map.description || "No description added yet for this map."}
           </p>
         </div>

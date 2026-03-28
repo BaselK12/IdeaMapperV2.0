@@ -16,16 +16,16 @@ import {
 
 const featureCards = [
   {
-    description: "Start from prompts and convert ideas into structured maps in seconds.",
-    title: "AI-assisted mapping",
+    description: "Start quickly with a clean canvas and shape ideas into a map without fighting the interface.",
+    title: "Focused map creation",
   },
   {
-    description: "Share live boards and keep your team aligned as ideas evolve.",
+    description: "Keep shared boards readable while teammates move through the same workspace together.",
     title: "Real-time collaboration",
   },
   {
-    description: "Move from brainstorm to roadmap with reusable structures.",
-    title: "Execution-ready output",
+    description: "Move from a quick brainstorm to a more structured workspace without leaving the flow.",
+    title: "Clear workspace flow",
   },
 ]
 
@@ -70,14 +70,14 @@ export function LandingPage() {
       <main className="mx-auto w-full max-w-6xl px-4 pb-20 pt-14 md:px-6">
         <section className="animate-fade-up space-y-6">
           <span className="inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-foreground">
-            V3 foundation
+            Realtime mind mapping
           </span>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
             Build and share idea maps with a clean, scalable workspace.
           </h1>
           <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-            This landing page is the starting point for V3. Hook in your data,
-            auth logic, and product flows without touching V2 behavior.
+            Create maps, invite teammates, and move from sign-in to a focused
+            shared workspace without losing clarity along the way.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -95,7 +95,7 @@ export function LandingPage() {
               variant="outline"
             >
               <PlayCircle className="size-4" />
-              Watch demo
+              See workflow
             </Button>
           </div>
           <SupabaseWarning className="max-w-2xl" />
@@ -124,17 +124,33 @@ export function LandingPage() {
           className="mt-16 animate-fade-up rounded-2xl border border-border/70 bg-card/70 p-6 sm:p-8"
           id="demo-section"
         >
-          <h2 className="text-2xl font-semibold tracking-tight">Demo Section</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            From sign-in to shared workspace
+          </h2>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Add your product walkthrough, screenshots, or short clip here. The
-            “Watch demo” button above scrolls directly to this section.
+            The core product flow stays simple: get into your account, find the
+            map you need, and continue editing in a workspace that keeps status,
+            people, and structure visible.
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/40 p-5 text-sm text-muted-foreground">
-              Product preview placeholder
+            <div className="rounded-xl border border-border/80 bg-background/70 p-5">
+              <p className="text-sm font-semibold text-foreground">
+                Quick entry
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Start with a lightweight auth flow that gets people back to
+                their maps quickly instead of burying the workspace behind extra
+                steps.
+              </p>
             </div>
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/40 p-5 text-sm text-muted-foreground">
-              Conversion CTA placeholder
+            <div className="rounded-xl border border-border/80 bg-background/70 p-5">
+              <p className="text-sm font-semibold text-foreground">
+                Focused collaboration
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Open the dashboard, choose a map, and work inside an editor that
+                keeps save state, presence, and navigation readable.
+              </p>
             </div>
           </div>
         </section>
