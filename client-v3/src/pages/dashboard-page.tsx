@@ -207,7 +207,7 @@ export function DashboardPage() {
                 <Users className="size-4" />
                 Join Map
               </Button>
-              <Button onClick={openCreateModal}>
+              <Button data-testid="create-map-btn" onClick={openCreateModal}>
                 <Plus className="size-4" />
                 New Map
               </Button>

@@ -310,7 +310,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <LayoutList className="size-3.5" />
               Nodes
             </p>
-            <ul className="space-y-1.5">
+            <ul className="space-y-1.5" data-testid="node-navigator-list">
               {outlineItems.length > 0 ? (
                 outlineItems.map((item) => (
                   <li key={item.id}>
@@ -382,6 +382,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   "rounded-full border px-2.5 py-1",
                   savePill.className
                 )}
+                data-testid="save-status-pill"
               >
                 {savePill.label}
               </span>

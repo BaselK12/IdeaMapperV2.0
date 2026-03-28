@@ -15,6 +15,9 @@ DECLARE
   v_map_count integer;
 BEGIN
   -- Read the caller's allowed map limit from their profile.
+  -- FOR UPDATE locks the profile row for the duration of this transaction,
+  -- preventing a concurrent create_map call from reading the same limit
+  -- before either INSERT completes (TOCTOU race condition).
   -- COALESCE on the column handles a NULL map_limit value.
   -- The second COALESCE assignment handles a missing profile row:
   -- PostgreSQL sets the INTO variable to NULL when no row is found,
@@ -22,7 +25,8 @@ BEGIN
   SELECT COALESCE(map_limit, 5)
   INTO v_map_limit
   FROM public.profiles
-  WHERE id = auth.uid();
+  WHERE id = auth.uid()
+  FOR UPDATE;
 
   v_map_limit := COALESCE(v_map_limit, 5);
 
