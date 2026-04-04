@@ -235,7 +235,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   return (
-    <section className="animate-fade-up flex h-[calc(100vh-2rem)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-lg">
+    <section className="animate-fade-up flex flex-col rounded-2xl border border-border/70 bg-card/95 shadow-lg xl:h-[calc(100vh-2rem)] xl:min-h-[640px] xl:overflow-hidden">
       <header className="space-y-3 border-b border-border/70 px-4 py-3.5 md:px-5 md:py-4">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -289,8 +289,8 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         />
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-4 p-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-        <aside className="min-h-0 rounded-2xl border border-border/70 bg-background/85 p-4">
+      <div className="grid gap-4 p-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside className="order-2 rounded-2xl border border-border/70 bg-background/85 p-4 xl:order-none xl:min-h-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             Navigator
           </p>
@@ -365,8 +365,8 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </aside>
 
-        <main className="relative min-h-[360px] overflow-hidden rounded-2xl border border-border/70 bg-background/85">
-          <div className="relative flex h-full flex-col p-4 md:p-6">
+        <main className="order-1 relative min-h-[26rem] overflow-hidden rounded-2xl border border-border/70 bg-background/85 xl:order-none xl:min-h-[360px]">
+          <div className="relative flex min-h-[26rem] flex-col p-4 md:p-6 xl:h-full xl:min-h-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
                 Canvas
@@ -468,7 +468,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </div>
             ) : null}
 
-            <div className="mt-3 min-h-0 flex-1">
+            <div className="mt-3 min-h-[22rem] flex-1 sm:min-h-[26rem] xl:min-h-0">
               <MapEditorCanvas
                 canEdit={editor.canEdit}
                 edges={editor.edges}
@@ -495,7 +495,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </main>
 
-        <aside className="min-h-0 rounded-2xl border border-border/70 bg-background/85 p-4">
+        <aside className="order-3 rounded-2xl border border-border/70 bg-background/85 p-4 xl:order-none xl:min-h-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             Inspector
           </p>

@@ -43,6 +43,10 @@ export function AppShell() {
   const { signOut, user } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
+  const accountName = user?.email?.split("@")[0] ?? "User"
+  const accountEmail = user?.email ?? "Signed in"
+  const accountInitial = (user?.email?.[0] ?? "U").toUpperCase()
+  const mobileNavItems = sidebarNav.filter((item) => item.kind === "link")
 
   const handleSignOut = async () => {
     setSignOutError(null)
@@ -66,7 +70,7 @@ export function AppShell() {
         <div className="pointer-events-none absolute -right-28 top-24 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="pointer-events-none absolute left-0 top-52 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="mx-auto flex min-h-screen w-full max-w-[1680px] flex-col px-3 py-3 md:px-5 md:py-5">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1680px] flex-col px-2 py-2 sm:px-3 sm:py-3 md:px-5 md:py-5">
           <Outlet />
         </div>
       </div>
@@ -79,8 +83,8 @@ export function AppShell() {
       <div className="pointer-events-none absolute -right-28 top-24 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute left-0 top-52 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-5 px-4 py-5 md:flex-row md:gap-6 md:px-6 md:py-6">
-        <aside className="animate-fade-up flex w-full flex-col rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm md:sticky md:top-6 md:h-[calc(100vh-3rem)] md:w-72 md:p-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-3 px-3 py-3 md:flex-row md:gap-6 md:px-6 md:py-6">
+        <aside className="animate-fade-up hidden w-full flex-col rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm md:sticky md:top-6 md:flex md:h-[calc(100vh-3rem)] md:w-72 md:p-4">
           <div className="rounded-xl bg-gradient-to-r from-primary-soft to-background p-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
               ideaMapper V3
@@ -140,14 +144,14 @@ export function AppShell() {
           <div className="mt-auto space-y-3 rounded-xl border border-border/70 bg-background/80 p-3">
             <div className="flex items-center gap-3">
               <div className="inline-flex size-9 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary">
-                {(user?.email?.[0] ?? "U").toUpperCase()}
+                {accountInitial}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {user?.email?.split("@")[0] ?? "User"}
+                  {accountName}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {user?.email ?? "Signed in"}
+                  {accountEmail}
                 </p>
               </div>
             </div>
@@ -170,7 +174,70 @@ export function AppShell() {
         </aside>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <header className="animate-fade-up rounded-2xl border border-border/70 bg-card/85 px-5 py-4 shadow-sm md:px-6">
+          <div className="animate-fade-up rounded-2xl border border-border/70 bg-card/90 px-3 py-3 shadow-sm md:hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                  ideaMapper V3
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                    {accountInitial}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {accountName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {accountEmail}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                className="h-9 shrink-0 px-3"
+                disabled={isSigningOut}
+                onClick={handleSignOut}
+                size="sm"
+                variant="outline"
+              >
+                <LogOut className="size-4" />
+                {isSigningOut ? "Signing out..." : "Sign out"}
+              </Button>
+            </div>
+
+            {signOutError ? (
+              <p className="mt-2 text-xs text-destructive">{signOutError}</p>
+            ) : null}
+
+            <nav aria-label="Mobile workspace navigation" className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {mobileNavItems.map((item) => {
+                const Icon = item.icon
+
+                return (
+                  <NavLink
+                    className={({ isActive }) =>
+                      cn(
+                        "inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "border-primary/30 bg-primary text-primary-foreground shadow-sm"
+                          : "border-border/80 bg-background/80 text-foreground/80 hover:bg-primary-soft hover:text-foreground"
+                      )
+                    }
+                    end={item.to === "/app"}
+                    key={item.label}
+                    to={item.to}
+                  >
+                    <Icon className="size-4" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                )
+              })}
+            </nav>
+          </div>
+
+          <header className="animate-fade-up hidden rounded-2xl border border-border/70 bg-card/85 px-5 py-4 shadow-sm md:block md:px-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/90">
               Workspace
             </p>
@@ -190,18 +257,7 @@ export function AppShell() {
             </div>
           </header>
 
-          <Button
-            className="mt-3 md:hidden"
-            disabled={isSigningOut}
-            onClick={handleSignOut}
-            size="sm"
-            variant="outline"
-          >
-            <LogOut className="size-4" />
-            {isSigningOut ? "Signing out..." : "Sign out"}
-          </Button>
-
-          <main className="mt-5 min-h-0 flex-1 pb-10">
+          <main className="mt-3 min-h-0 flex-1 pb-10 md:mt-5">
             <Outlet />
           </main>
         </div>

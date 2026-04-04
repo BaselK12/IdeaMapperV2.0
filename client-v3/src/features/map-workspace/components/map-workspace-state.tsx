@@ -59,7 +59,7 @@ export function MapWorkspaceState({
   const Icon = config.icon
 
   return (
-    <section className="animate-fade-up flex h-[calc(100vh-2rem)] min-h-[540px] items-center">
+    <section className="animate-fade-up flex min-h-[60svh] items-center py-6 xl:h-[calc(100vh-2rem)] xl:min-h-[540px] xl:py-0">
       <Card className="mx-auto w-full max-w-2xl border-border/70 bg-card/95 shadow-lg">
         <CardHeader className="items-center space-y-4 pb-4 text-center">
           <div
