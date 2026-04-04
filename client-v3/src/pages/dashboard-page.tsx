@@ -35,18 +35,18 @@ function LoadingRows() {
     <div className="space-y-2.5">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
-          className="animate-pulse rounded-xl border border-border/70 bg-muted/40 p-4"
+          className="animate-pulse rounded-xl border border-border/70 bg-card/80 p-4"
           key={index}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="size-10 rounded-xl bg-muted" />
+              <div className="size-10 rounded-xl bg-muted/80" />
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-4 w-44 rounded bg-muted" />
-                <div className="h-3 w-72 max-w-full rounded bg-muted" />
+                <div className="h-4 w-44 rounded bg-muted/80" />
+                <div className="h-3 w-72 max-w-full rounded bg-muted/80" />
               </div>
             </div>
-            <div className="h-6 w-20 rounded-full bg-muted" />
+            <div className="h-6 w-20 rounded-full bg-muted/80" />
           </div>
         </div>
       ))}
@@ -271,8 +271,8 @@ export function DashboardPage() {
           ) : null}
 
           {hasNoMaps ? (
-            <div className="rounded-2xl border border-dashed border-border/80 bg-primary-soft/25 px-5 py-10 text-center">
-              <div className="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+            <div className="rounded-2xl border border-dashed border-[hsl(var(--info-border))] bg-[hsl(var(--info-soft))] px-5 py-10 text-center">
+              <div className="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-background/80 text-[hsl(var(--info-foreground))]">
                 <FolderKanban className="size-5" />
               </div>
               <h3 className="mt-4 text-base font-semibold text-foreground">
@@ -296,8 +296,8 @@ export function DashboardPage() {
           ) : null}
 
           {hasNoSearchResults ? (
-            <div className="rounded-2xl border border-dashed border-border/80 bg-muted/25 px-5 py-10 text-center">
-              <div className="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-background text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border/80 bg-muted/45 px-5 py-10 text-center">
+              <div className="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-card text-muted-foreground">
                 <FileSearch className="size-5" />
               </div>
               <h3 className="mt-4 text-base font-semibold text-foreground">

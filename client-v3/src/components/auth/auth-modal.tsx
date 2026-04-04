@@ -55,7 +55,7 @@ export function AuthModal({
     >
       <button
         aria-label="Close auth modal"
-        className="absolute inset-0 bg-foreground/45 backdrop-blur-[1px] animate-fade-in"
+        className="absolute inset-0 animate-fade-in bg-black/60 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
         type="button"
       />

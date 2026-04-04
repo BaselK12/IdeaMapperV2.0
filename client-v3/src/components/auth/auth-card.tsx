@@ -116,13 +116,13 @@ export function AuthCard({
   return (
     <Card className={cn("border-border/80 bg-card/95 shadow-lg", className)}>
       <CardHeader className="space-y-4">
-        <div className="inline-flex rounded-md bg-muted p-1">
+        <div className="inline-flex rounded-md border border-border/70 bg-muted/70 p-1">
           <button
             className={cn(
               "rounded px-3 py-1.5 text-sm font-medium transition-colors",
               activeTab === "login"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
             )}
             onClick={() => setActiveTab("login")}
             type="button"
@@ -133,8 +133,8 @@ export function AuthCard({
             className={cn(
               "rounded px-3 py-1.5 text-sm font-medium transition-colors",
               activeTab === "signup"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
             )}
             onClick={() => setActiveTab("signup")}
             type="button"
@@ -187,10 +187,14 @@ export function AuthCard({
             {submitLabel}
           </Button>
           {errorMessage ? (
-            <p className="text-xs text-destructive">{errorMessage}</p>
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {errorMessage}
+            </p>
           ) : null}
           {successMessage ? (
-            <p className="text-xs text-emerald-700">{successMessage}</p>
+            <p className="rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-xs text-[hsl(var(--success-foreground))]">
+              {successMessage}
+            </p>
           ) : null}
           {!isConfigured ? (
             <p className="text-xs text-muted-foreground">

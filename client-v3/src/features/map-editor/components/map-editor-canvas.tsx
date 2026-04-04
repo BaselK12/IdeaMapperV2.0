@@ -30,6 +30,56 @@ const nodeTypes = {
   mapNode: MapEditorNode,
 }
 
+const reactFlowChromeStyles = `
+  .map-editor-flow .react-flow__selection {
+    border: 1px solid hsl(var(--primary) / 0.55);
+    background: hsl(var(--primary) / 0.12);
+  }
+
+  .map-editor-flow .react-flow__controls-button {
+    display: flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-bottom: 1px solid hsl(var(--border) / 0.78);
+    background: hsl(var(--card) / 0.95);
+    color: hsl(var(--foreground));
+    transition: background-color 140ms ease, color 140ms ease;
+  }
+
+  .map-editor-flow .react-flow__controls-button:last-child {
+    border-bottom: 0;
+  }
+
+  .map-editor-flow .react-flow__controls-button:hover {
+    background: hsl(var(--muted) / 0.88);
+  }
+
+  .map-editor-flow .react-flow__controls-button:disabled {
+    color: hsl(var(--muted-foreground) / 0.72);
+  }
+
+  .map-editor-flow .react-flow__controls-button svg {
+    fill: currentColor;
+    stroke: currentColor;
+  }
+
+  .map-editor-flow .react-flow__minimap {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  }
+
+  .map-editor-flow .react-flow__controls {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  }
+
+  .dark .map-editor-flow .react-flow__minimap,
+  .dark .map-editor-flow .react-flow__controls {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+`
+
 function isEditableEventTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -319,7 +369,7 @@ export function MapEditorCanvas({
           ...edge.style,
           stroke: edge.selected
             ? "hsl(var(--primary) / 0.92)"
-            : "hsl(var(--foreground) / 0.34)",
+            : "hsl(var(--muted-foreground) / 0.58)",
           strokeWidth: edge.selected ? 2.4 : 1.8,
         },
       })),
@@ -421,7 +471,7 @@ export function MapEditorCanvas({
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-xl border border-destructive/40 bg-destructive/5 px-5 text-center">
         <p className="text-sm font-medium text-destructive">Failed to load nodes and edges</p>
-        <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
+        <p className="mt-1 text-xs text-destructive/90">{loadError}</p>
         <Button className="mt-4" onClick={onRetryLoad} size="sm" variant="outline">
           Retry
         </Button>
@@ -430,7 +480,8 @@ export function MapEditorCanvas({
   }
 
   return (
-    <div className="relative h-full overflow-hidden rounded-xl border border-border/70 bg-background/90">
+    <div className="relative h-full overflow-hidden rounded-xl border border-border/70 bg-background/95 shadow-inner">
+      <style>{reactFlowChromeStyles}</style>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.45)_1px,transparent_0)] [background-size:22px_22px]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/50 via-transparent to-background/60" />
 
@@ -458,12 +509,13 @@ export function MapEditorCanvas({
         ref={flowContainerRef}
       >
         <ReactFlow
+          className="map-editor-flow"
           defaultEdgeOptions={{
             markerEnd: {
               type: MarkerType.ArrowClosed,
             },
             style: {
-              stroke: "hsl(var(--foreground) / 0.34)",
+              stroke: "hsl(var(--muted-foreground) / 0.58)",
               strokeWidth: 1.8,
             },
             type: "smoothstep",
@@ -492,14 +544,19 @@ export function MapEditorCanvas({
           selectionOnDrag
         >
           <MiniMap
-            className="!bg-card/90"
-            maskColor="hsl(var(--background) / 0.45)"
+            className="!rounded-xl"
+            maskColor="hsl(var(--background) / 0.72)"
             nodeBorderRadius={8}
-            nodeColor="hsl(var(--primary) / 0.35)"
+            nodeColor="hsl(var(--primary) / 0.4)"
+            nodeStrokeColor="hsl(var(--border) / 0.9)"
             pannable
+            style={{
+              backgroundColor: "hsl(var(--card) / 0.95)",
+              border: "1px solid hsl(var(--border) / 0.8)",
+            }}
             zoomable
           />
-          <Controls className="!border-border/70 !bg-card/95 !shadow-sm" />
+          <Controls className="!overflow-hidden !rounded-xl !border !border-border/80 !bg-card/95 !shadow-lg" />
           <Background color="hsl(var(--border) / 0.5)" gap={22} size={1} />
         </ReactFlow>
       </div>

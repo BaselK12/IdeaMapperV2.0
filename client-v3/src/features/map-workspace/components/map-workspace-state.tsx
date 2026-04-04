@@ -32,14 +32,15 @@ const stateConfig: Record<WorkspaceStateVariant, WorkspaceStateConfig> = {
     description:
       "This workspace is not available with your current account access.",
     icon: LockKeyhole,
-    iconClassName: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    iconClassName:
+      "bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning-foreground))]",
     title: "Access required",
   },
   "not-found": {
     description:
       "The map link is invalid, or this workspace no longer exists in its original location.",
     icon: SearchX,
-    iconClassName: "bg-primary-soft text-primary",
+    iconClassName: "bg-primary-soft/80 text-primary",
     title: "Workspace not found",
   },
 }
@@ -75,7 +76,7 @@ export function MapWorkspaceState({
         <CardContent className="space-y-5 px-8 pb-8 text-center">
           <p className="text-sm text-muted-foreground">{config.description}</p>
           {detail ? (
-            <p className="rounded-xl border border-border/80 bg-background/80 px-4 py-3 text-xs text-muted-foreground">
+            <p className="rounded-xl border border-border/80 bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
               {detail}
             </p>
           ) : null}

@@ -49,6 +49,15 @@ type StatusPill = {
   label: string
 }
 
+const infoStatusClassName =
+  "border-[hsl(var(--info-border))] bg-[hsl(var(--info-soft))] text-[hsl(var(--info-foreground))]"
+const successStatusClassName =
+  "border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] text-[hsl(var(--success-foreground))]"
+const warningStatusClassName =
+  "border-[hsl(var(--warning-border))] bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning-foreground))]"
+const neutralStatusClassName =
+  "border-border/80 bg-card/95 text-muted-foreground"
+
 function formatRole(role: string) {
   if (role === "admin" || role === "editor" || role === "viewer") {
     return role.charAt(0).toUpperCase() + role.slice(1)
@@ -59,14 +68,14 @@ function formatRole(role: string) {
 
 function roleClassName(role: string) {
   if (role === "admin") {
-    return "border-violet-300/70 bg-violet-100 text-violet-700"
+    return "border-primary/25 bg-primary-soft/80 text-primary"
   }
 
   if (role === "editor") {
-    return "border-blue-300/70 bg-blue-100 text-blue-700"
+    return infoStatusClassName
   }
 
-  return "border-slate-300/70 bg-slate-100 text-slate-700"
+  return "border-border/80 bg-muted/70 text-muted-foreground"
 }
 
 function formatLastEdited(lastEdited: string | null) {
@@ -106,34 +115,34 @@ function saveStatusPill(status: MapEditorSaveStatus, canEdit: boolean): StatusPi
 
   if (!canEdit) {
     return {
-      className: "border-border/80 bg-background/90 text-muted-foreground",
+      className: neutralStatusClassName,
       label: "View only",
     }
   }
 
   if (status === "dirty") {
     return {
-      className: "border-orange-300/70 bg-orange-100 text-orange-700",
+      className: warningStatusClassName,
       label: "Unsaved edits",
     }
   }
 
   if (status === "saving") {
     return {
-      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      className: infoStatusClassName,
       label: "Saving...",
     }
   }
 
   if (status === "saved") {
     return {
-      className: "border-emerald-300/70 bg-emerald-100 text-emerald-700",
+      className: successStatusClassName,
       label: "Saved",
     }
   }
 
   return {
-    className: "border-border/80 bg-background/90 text-muted-foreground",
+    className: neutralStatusClassName,
     label: "No local edits",
   }
 }
@@ -141,20 +150,20 @@ function saveStatusPill(status: MapEditorSaveStatus, canEdit: boolean): StatusPi
 function syncStatusPill(status: MapEditorSyncStatus): StatusPill {
   if (status === "error") {
     return {
-      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      className: warningStatusClassName,
       label: "Realtime offline",
     }
   }
 
   if (status === "connecting") {
     return {
-      className: "border-sky-300/70 bg-sky-100 text-sky-700",
+      className: infoStatusClassName,
       label: "Realtime reconnecting",
     }
   }
 
   return {
-    className: "border-emerald-300/70 bg-emerald-100 text-emerald-700",
+    className: successStatusClassName,
     label: "Realtime live",
   }
 }
@@ -162,14 +171,14 @@ function syncStatusPill(status: MapEditorSyncStatus): StatusPill {
 function liveCursorStatusPill(status: MapWorkspaceRealtimeStatus): StatusPill | null {
   if (status === "offline") {
     return {
-      className: "border-amber-300/70 bg-amber-100 text-amber-700",
+      className: warningStatusClassName,
       label: "Cursors offline",
     }
   }
 
   if (status === "connecting") {
     return {
-      className: "border-sky-300/70 bg-sky-100 text-sky-700",
+      className: infoStatusClassName,
       label: "Cursors reconnecting",
     }
   }
@@ -290,7 +299,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
       </header>
 
       <div className="grid gap-4 p-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-        <aside className="order-2 rounded-2xl border border-border/70 bg-background/85 p-4 xl:order-none xl:min-h-0">
+        <aside className="order-2 rounded-2xl border border-border/70 bg-card/90 p-4 xl:order-none xl:min-h-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             Navigator
           </p>
@@ -353,11 +362,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           <div className="space-y-2.5">
             <p className="text-xs font-medium text-muted-foreground">Map stats</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl border border-border/80 bg-card px-2.5 py-2">
+              <div className="rounded-xl border border-border/80 bg-card/95 px-2.5 py-2">
                 <p className="text-[11px] text-muted-foreground">Nodes</p>
                 <p className="text-sm font-semibold text-foreground">{editor.nodeCount}</p>
               </div>
-              <div className="rounded-xl border border-border/80 bg-card px-2.5 py-2">
+              <div className="rounded-xl border border-border/80 bg-card/95 px-2.5 py-2">
                 <p className="text-[11px] text-muted-foreground">Edges</p>
                 <p className="text-sm font-semibold text-foreground">{editor.edges.length}</p>
               </div>
@@ -365,16 +374,16 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </aside>
 
-        <main className="order-1 relative min-h-[26rem] overflow-hidden rounded-2xl border border-border/70 bg-background/85 xl:order-none xl:min-h-[360px]">
+        <main className="order-1 relative min-h-[26rem] overflow-hidden rounded-2xl border border-border/70 bg-card/90 xl:order-none xl:min-h-[360px]">
           <div className="relative flex min-h-[26rem] flex-col p-4 md:p-6 xl:h-full xl:min-h-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
+              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
                 Canvas
               </span>
-              <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
+              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
                 {formatRole(map.role)} access
               </span>
-              <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-1">
+              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
                 Last edited {formatLastEdited(mapLastEdited)}
               </span>
               <span
@@ -400,18 +409,18 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                 </span>
               ) : null}
               {editor.hasRemoteUpdateAvailable ? (
-                <span className="rounded-full border border-orange-300/70 bg-orange-100 px-2.5 py-1 text-orange-700">
+                <span className={cn("rounded-full border px-2.5 py-1", warningStatusClassName)}>
                   Newer saved version available
                 </span>
               ) : null}
             </div>
 
             {editor.hasRemoteUpdateAvailable ? (
-              <div className="mt-2 rounded-lg border border-orange-300/55 bg-orange-50 px-3 py-2">
-                <p className="text-xs font-medium text-orange-700">
+              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                <p className="text-xs font-medium">
                   A newer saved version was published in another session.
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs opacity-90">
                   Your local unsaved edits are still safe in this tab. Save to keep them,
                   or reload to replace them with the latest persisted graph.
                 </p>
@@ -428,9 +437,9 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             ) : null}
 
             {editor.saveError ? (
-              <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2">
-                <p className="text-xs font-medium text-destructive">Could not save latest edit</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{editor.saveError}</p>
+              <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-destructive">
+                <p className="text-xs font-medium">Could not save latest edit</p>
+                <p className="mt-0.5 text-xs opacity-90">{editor.saveError}</p>
                 {editor.canEdit ? (
                   <Button className="mt-2 h-7 px-2.5 text-xs" onClick={editor.retrySave} size="sm" variant="outline">
                     Retry save
@@ -440,28 +449,28 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             ) : null}
 
             {editor.selectionInvalidationNotice ? (
-              <div className="mt-2 rounded-lg border border-sky-300/50 bg-sky-50 px-3 py-2">
-                <p className="text-xs font-medium text-sky-800">Selection updated</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+              <div className={cn("mt-2 rounded-lg border px-3 py-2", infoStatusClassName)}>
+                <p className="text-xs font-medium">Selection updated</p>
+                <p className="mt-0.5 text-xs opacity-90">
                   {editor.selectionInvalidationNotice}
                 </p>
               </div>
             ) : null}
 
             {editor.syncError ? (
-              <div className="mt-2 rounded-lg border border-amber-300/45 bg-amber-50 px-3 py-2">
-                <p className="text-xs font-medium text-amber-700">Realtime sync issue</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{editor.syncError}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                <p className="text-xs font-medium">Realtime sync issue</p>
+                <p className="mt-0.5 text-xs opacity-90">{editor.syncError}</p>
+                <p className="mt-0.5 text-xs opacity-90">
                   Local editing and save still work while realtime reconnects.
                 </p>
               </div>
             ) : null}
 
             {liveCursors.realtimeStatus === "offline" ? (
-              <div className="mt-2 rounded-lg border border-amber-300/45 bg-amber-50 px-3 py-2">
-                <p className="text-xs font-medium text-amber-700">Live cursors unavailable</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                <p className="text-xs font-medium">Live cursors unavailable</p>
+                <p className="mt-0.5 text-xs opacity-90">
                   Cursor and drag previews are temporarily offline. Continue editing
                   normally; they return automatically after reconnect.
                 </p>
@@ -495,13 +504,13 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </main>
 
-        <aside className="order-3 rounded-2xl border border-border/70 bg-background/85 p-4 xl:order-none xl:min-h-0">
+        <aside className="order-3 rounded-2xl border border-border/70 bg-card/90 p-4 xl:order-none xl:min-h-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
             Inspector
           </p>
 
           {editor.selectedNode ? (
-            <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/80 p-3.5">
+            <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/95 p-3.5">
               <p className="text-sm font-medium text-foreground">Selected node</p>
               <div className="space-y-1 text-xs">
                 <p className="text-muted-foreground">ID</p>
@@ -525,13 +534,13 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                 ) : null}
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2">
                   <p className="text-muted-foreground">Position</p>
                   <p className="font-medium text-foreground">
                     {editor.selectedNode.position.x}, {editor.selectedNode.position.y}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2">
                   <p className="text-muted-foreground">Connections</p>
                   <p className="font-medium text-foreground">
                     {editor.selectedNode.incomingEdgeCount} in,{" "}
@@ -541,20 +550,20 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </div>
             </div>
           ) : editor.selectedEdge ? (
-            <div className="mt-3 space-y-2.5 rounded-xl border border-border/80 bg-card/80 p-3.5">
+            <div className="mt-3 space-y-2.5 rounded-xl border border-border/80 bg-card/95 p-3.5">
               <p className="text-sm font-medium text-foreground">Selected edge</p>
               <div className="space-y-1 text-xs">
                 <p className="text-muted-foreground">ID</p>
                 <p className="font-medium text-foreground">{editor.selectedEdge.id}</p>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2">
                   <p className="text-muted-foreground">Source</p>
                   <p className="font-medium text-foreground">
                     {editor.selectedEdge.sourceNodeId}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-2">
+                <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2">
                   <p className="text-muted-foreground">Target</p>
                   <p className="font-medium text-foreground">
                     {editor.selectedEdge.targetNodeId}
@@ -569,7 +578,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               ) : null}
             </div>
           ) : (
-            <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-card/75 p-3.5">
+            <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-card/90 p-3.5">
               <p className="text-sm font-medium text-foreground">Nothing selected</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Choose a node in the canvas or navigator to inspect and edit details.
@@ -607,7 +616,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <CalendarClock className="size-3.5" />
               Description
             </p>
-            <p className="rounded-xl border border-border/80 bg-card/75 px-3 py-2.5 text-xs text-muted-foreground">
+            <p className="rounded-xl border border-border/80 bg-card/90 px-3 py-2.5 text-xs text-muted-foreground">
               {map.description || "No description available yet."}
             </p>
           </div>

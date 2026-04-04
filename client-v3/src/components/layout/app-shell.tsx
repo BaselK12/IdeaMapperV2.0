@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom"
 
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/auth-context"
 import { cn } from "@/lib/utils"
@@ -211,6 +212,13 @@ export function AppShell() {
               <p className="mt-2 text-xs text-destructive">{signOutError}</p>
             ) : null}
 
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Theme
+              </p>
+              <ThemeToggle />
+            </div>
+
             <nav aria-label="Mobile workspace navigation" className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {mobileNavItems.map((item) => {
                 const Icon = item.icon
@@ -250,9 +258,12 @@ export function AppShell() {
                   Organize maps, invite participants, and continue your work.
                 </p>
               </div>
-              <div className="hidden items-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground md:inline-flex">
-                <Settings className="mr-2 size-4 text-primary" />
-                V3 shell
+              <div className="flex shrink-0 items-center gap-3">
+                <ThemeToggle className="shrink-0" />
+                <div className="hidden items-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground xl:inline-flex">
+                  <Settings className="mr-2 size-4 text-primary" />
+                  V3 shell
+                </div>
               </div>
             </div>
           </header>

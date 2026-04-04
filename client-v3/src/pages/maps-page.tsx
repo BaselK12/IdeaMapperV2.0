@@ -18,7 +18,7 @@ export function MapsPage() {
           Placeholder route for upcoming V3 map list and creation flows.
         </p>
       </div>
-      <Card className="max-w-2xl border-slate-200/70 bg-white/80 shadow-sm">
+      <Card className="max-w-2xl border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
           <CardTitle>Map Workspace Placeholder</CardTitle>
           <CardDescription>

@@ -107,7 +107,7 @@ export function JoinMapModal({
           </p>
         ) : null}
         {infoMessage ? (
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <p className="rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-sm text-[hsl(var(--success-foreground))]">
             {infoMessage}
           </p>
         ) : null}

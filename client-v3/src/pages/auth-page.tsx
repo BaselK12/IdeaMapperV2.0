@@ -67,7 +67,7 @@ export function AuthPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
                     Direct sign-in
                   </p>
@@ -75,7 +75,7 @@ export function AuthPage() {
                     Keep access simple with one clear entry point into the app.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
                     Return to flow
                   </p>
@@ -83,7 +83,7 @@ export function AuthPage() {
                     Go back to the dashboard or requested route after auth.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
                     Shared workspace
                   </p>

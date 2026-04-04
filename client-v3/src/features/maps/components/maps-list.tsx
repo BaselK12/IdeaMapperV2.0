@@ -18,14 +18,14 @@ function formatRole(role: string) {
 
 function roleClassName(role: string) {
   if (role === "admin") {
-    return "border-violet-200/80 bg-violet-50 text-violet-700"
+    return "border-primary/25 bg-primary-soft text-primary"
   }
 
   if (role === "editor") {
-    return "border-blue-200/80 bg-blue-50 text-blue-700"
+    return "border-[hsl(var(--info-border))] bg-[hsl(var(--info-soft))] text-[hsl(var(--info-foreground))]"
   }
 
-  return "border-slate-200/80 bg-slate-50 text-slate-600"
+  return "border-border/80 bg-muted/70 text-muted-foreground"
 }
 
 function formatLastEdited(lastEdited: string | null) {

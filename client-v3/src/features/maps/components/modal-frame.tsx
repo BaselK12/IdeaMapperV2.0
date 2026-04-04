@@ -27,7 +27,7 @@ export function ModalFrame({
     <div className="fixed inset-0 z-50 grid place-items-center px-4 py-8">
       <button
         aria-label="Close dialog"
-        className="absolute inset-0 bg-foreground/35 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
         type="button"
       />

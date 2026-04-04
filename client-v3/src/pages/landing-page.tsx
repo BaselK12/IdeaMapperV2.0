@@ -50,7 +50,7 @@ export function LandingPage() {
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary-soft/80 via-background to-background" />
       <div className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-80 w-80 -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
 
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-6">
           <Link className="inline-flex items-center gap-2 text-sm font-semibold" to="/">
             <span className="grid size-7 place-content-center rounded-md bg-primary text-primary-foreground">
@@ -104,7 +104,7 @@ export function LandingPage() {
         <section className="mt-14 grid gap-4 md:grid-cols-3">
           {featureCards.map((feature, index) => (
             <Card
-              className="animate-fade-up border-border/70 bg-card/80 transition-transform duration-300 hover:-translate-y-1"
+              className="animate-fade-up border-border/70 bg-card/95 shadow-sm transition-transform duration-300 hover:-translate-y-1"
               key={feature.title}
               style={{ animationDelay: `${index * 60}ms` }}
             >
@@ -121,7 +121,7 @@ export function LandingPage() {
         </section>
 
         <section
-          className="mt-16 animate-fade-up rounded-2xl border border-border/70 bg-card/70 p-6 sm:p-8"
+          className="mt-16 animate-fade-up rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8"
           id="demo-section"
         >
           <h2 className="text-2xl font-semibold tracking-tight">
@@ -133,7 +133,7 @@ export function LandingPage() {
             people, and structure visible.
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-border/80 bg-background/70 p-5">
+            <div className="rounded-xl border border-border/80 bg-background/95 p-5 shadow-sm">
               <p className="text-sm font-semibold text-foreground">
                 Quick entry
               </p>
@@ -143,7 +143,7 @@ export function LandingPage() {
                 steps.
               </p>
             </div>
-            <div className="rounded-xl border border-border/80 bg-background/70 p-5">
+            <div className="rounded-xl border border-border/80 bg-background/95 p-5 shadow-sm">
               <p className="text-sm font-semibold text-foreground">
                 Focused collaboration
               </p>

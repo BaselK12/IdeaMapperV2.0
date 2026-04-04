@@ -14,7 +14,7 @@ export function SettingsPage() {
           Environment and integration checks for the V3 client.
         </p>
       </div>
-      <Card className="max-w-2xl border-slate-200/70 bg-white/80 shadow-sm">
+      <Card className="max-w-2xl border-border/70 bg-card/95 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <KeyRound className="size-4 text-primary" />
@@ -23,7 +23,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           {supabaseReady ? (
-            <span className="inline-flex items-center gap-2 text-emerald-700">
+            <span className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-[hsl(var(--success-foreground))]">
               <Check className="size-4" />
               VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are wired.
             </span>
