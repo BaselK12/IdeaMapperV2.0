@@ -45,7 +45,7 @@ export function AuthPage() {
           </Button>
           <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             <Sparkles className="size-4 text-primary" />
-            ideaMapper V3
+            Branchly
           </p>
         </div>
 

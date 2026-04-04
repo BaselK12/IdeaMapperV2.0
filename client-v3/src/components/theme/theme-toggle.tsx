@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 
 type ThemeToggleProps = {
   className?: string
+  compact?: boolean
 }
 
 const themeOptions: Array<{
@@ -31,13 +32,14 @@ const themeOptions: Array<{
   },
 ]
 
-export function ThemeToggle({ className }: ThemeToggleProps) {
+export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
   const { resolvedTheme, setTheme, theme } = useTheme()
 
   return (
     <div
       className={cn(
         "inline-flex items-center gap-1 rounded-xl border border-border/70 bg-background/85 p-1 shadow-sm",
+        compact && "rounded-full",
         className
       )}
     >
@@ -47,6 +49,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           aria-pressed={theme === value}
           className={cn(
             "h-8 px-2.5 text-xs",
+            compact && "size-8 px-0",
             theme !== value && "text-muted-foreground"
           )}
           key={value}
@@ -61,7 +64,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           variant={theme === value ? "default" : "ghost"}
         >
           <Icon className="size-3.5" />
-          {label}
+          <span className={compact ? "sr-only" : undefined}>{label}</span>
         </Button>
       ))}
     </div>

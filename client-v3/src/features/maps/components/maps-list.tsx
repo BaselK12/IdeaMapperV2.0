@@ -45,42 +45,36 @@ function formatLastEdited(lastEdited: string | null) {
   })
 }
 
-function shortId(id: string) {
-  if (id.length <= 10) {
-    return id
-  }
-
-  return `${id.slice(0, 8)}...${id.slice(-4)}`
-}
-
 export function MapsList({ maps, onOpenMap }: MapsListProps) {
   return (
     <div className="space-y-2">
       <ul className="space-y-2" role="list">
-        {maps.map((map) => (
+        {maps.map((map) => {
+          const description = map.description?.trim()
+
+          return (
           <li key={map.id}>
             <button
-              className="group flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3.5 text-left transition-all hover:border-primary/30 hover:bg-primary-soft/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:gap-4 md:py-4"
+              className="group flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary-soft/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:gap-4 md:py-4"
               onClick={() => onOpenMap(map.id)}
               type="button"
             >
-              <div className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background text-primary/85">
+              <div className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary-soft/55 text-primary shadow-sm transition-colors group-hover:bg-primary-soft">
                 <Map className="size-4" />
               </div>
 
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="truncate text-base font-semibold tracking-tight text-foreground">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="truncate text-[15px] font-semibold tracking-tight text-foreground md:text-base">
                   {map.name}
                 </p>
-                <p className="line-clamp-1 text-sm text-muted-foreground">
-                  {map.description || "No description provided."}
-                </p>
-                <p className="hidden text-[10px] uppercase tracking-[0.14em] text-muted-foreground/65 sm:block">
-                  ID {shortId(map.id)}
-                </p>
+                {description ? (
+                  <p className="line-clamp-1 text-sm text-muted-foreground">
+                    {description}
+                  </p>
+                ) : null}
               </div>
 
-              <div className="hidden min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground/75 md:flex">
+              <div className="hidden min-w-[9rem] items-center justify-end gap-1.5 text-[11px] text-muted-foreground/70 md:flex">
                 <Clock3 className="size-3.5" />
                 Updated {formatLastEdited(map.lastEdited)}
               </div>
@@ -88,17 +82,17 @@ export function MapsList({ maps, onOpenMap }: MapsListProps) {
               <div className="flex items-center gap-1.5">
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium",
                     roleClassName(map.role)
                   )}
                 >
                   {formatRole(map.role)}
                 </span>
-                <ArrowRight className="size-4 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                <ArrowRight className="size-4 text-muted-foreground/55 transition-all group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
             </button>
           </li>
-        ))}
+        )})}
       </ul>
     </div>
   )

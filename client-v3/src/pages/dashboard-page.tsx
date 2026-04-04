@@ -5,7 +5,6 @@ import {
   FolderKanban,
   Plus,
   Search,
-  Sparkles,
   Users,
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
@@ -188,47 +187,52 @@ export function DashboardPage() {
   }
 
   return (
-    <section className="space-y-6">
-      <Card className="animate-fade-up relative overflow-hidden border-border/70 bg-card/95 shadow-md">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/90 via-transparent to-background" />
-        <div className="pointer-events-none absolute -right-20 top-6 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
-        <CardContent className="relative p-5 md:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2.5">
-              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                <Sparkles className="size-3.5" />
+    <section className="space-y-5">
+      <div className="animate-fade-up relative overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-5 shadow-sm md:p-6">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary-soft/80 via-transparent to-card" />
+        <div className="pointer-events-none absolute -right-16 top-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/90">
                 Dashboard
               </p>
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-                Your Maps Workspace
-              </h2>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                Your maps
+              </h1>
               <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
-                Keep all collaborative maps in one clean list-first workspace.
-                Create a new map or join an existing one in seconds.
+                Create a map, reopen a workspace, or join one shared with your
+                team.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={openJoinModal} variant="outline">
-                <Users className="size-4" />
-                Join Map
-              </Button>
-              <Button data-testid="create-map-btn" onClick={openCreateModal}>
-                <Plus className="size-4" />
-                New Map
-              </Button>
+            <div className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+              {accessibleMaps.length}{" "}
+              {accessibleMaps.length === 1 ? "map" : "maps"} in your workspace
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={openJoinModal} variant="outline">
+              <Users className="size-4" />
+              Join Map
+            </Button>
+            <Button data-testid="create-map-btn" onClick={openCreateModal}>
+              <Plus className="size-4" />
+              New Map
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <Card className="animate-fade-up border-border/70 bg-card/95 shadow-md">
         <CardHeader className="flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col gap-1">
-            <CardTitle className="text-base md:text-lg">Map Library</CardTitle>
+            <CardTitle className="text-base md:text-lg">All maps</CardTitle>
             <p className="text-sm text-muted-foreground">
               {accessibleMaps.length}{" "}
-              {accessibleMaps.length === 1 ? "map" : "maps"} available to you
+              {accessibleMaps.length === 1 ? "map" : "maps"} in your workspace
             </p>
           </div>
 
