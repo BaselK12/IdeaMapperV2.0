@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react"
-import { Github } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -11,9 +11,15 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/features/auth/auth-context"
+import { normalizeAuthError, supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
 export type AuthTab = "login" | "signup"
+
+// "forgot-password" is an internal view, not a selectable tab.
+type InternalView = AuthTab | "forgot-password"
+
+const MIN_PASSWORD_LENGTH = 8
 
 type AuthCardProps = {
   className?: string
@@ -43,114 +49,164 @@ export function AuthCard({
   onAuthSuccess,
 }: AuthCardProps) {
   const { isConfigured, signInWithPassword, signUpWithPassword } = useAuth()
-  const [activeTab, setActiveTab] = useState<AuthTab>(defaultTab)
+  const [view, setView] = useState<InternalView>(defaultTab)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Sync with defaultTab prop changes (e.g. when the modal opens on a specific tab)
   useEffect(() => {
-    setActiveTab(defaultTab)
+    setView(defaultTab)
     setErrorMessage(null)
     setSuccessMessage(null)
   }, [defaultTab])
 
+  // Clear messages on any view transition
   useEffect(() => {
     setErrorMessage(null)
     setSuccessMessage(null)
-  }, [activeTab])
+  }, [view])
 
+  const isForgotPassword = view === "forgot-password"
+  // The tab strip always reflects login/signup — forgot-password sits under login
+  const activeTab: AuthTab = isForgotPassword ? "login" : view
   const activeContent = tabContent[activeTab]
   const isFormDisabled = !isConfigured || isSubmitting
-  const submitLabel =
-    isSubmitting && activeTab === "login"
-      ? "Logging in..."
-      : isSubmitting && activeTab === "signup"
-        ? "Creating account..."
-        : activeContent.submitLabel
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const submitLabel = isSubmitting
+    ? view === "login"
+      ? "Logging in…"
+      : view === "signup"
+        ? "Creating account…"
+        : "Sending reset link…"
+    : view === "forgot-password"
+      ? "Send reset link"
+      : activeContent.submitLabel
+
+  const handleSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault()
     setErrorMessage(null)
     setSuccessMessage(null)
     setIsSubmitting(true)
 
-    if (activeTab === "login") {
-      const { error } = await signInWithPassword({ email, password })
+    // ── Forgot password ────────────────────────────────────────────────────
+    if (view === "forgot-password") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+      if (error) {
+        setErrorMessage(normalizeAuthError(error.message))
+        setIsSubmitting(false)
+        return
+      }
+      setSuccessMessage(
+        "Reset link sent. Check your email — it may take a minute to arrive."
+      )
+      setIsSubmitting(false)
+      return
+    }
 
+    // ── Sign up ────────────────────────────────────────────────────────────
+    if (view === "signup") {
+      // Client-side validation: enforce minimum length before hitting the API.
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setErrorMessage(
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+        )
+        setIsSubmitting(false)
+        return
+      }
+
+      const { error, requiresEmailConfirmation } = await signUpWithPassword({
+        email,
+        password,
+      })
       if (error) {
         setErrorMessage(error)
         setIsSubmitting(false)
         return
       }
-
       setIsSubmitting(false)
+      if (requiresEmailConfirmation) {
+        setSuccessMessage(
+          "Account created. Check your email for a confirmation link, then log in."
+        )
+        return
+      }
       onAuthSuccess?.()
       return
     }
 
-    const { error, requiresEmailConfirmation } = await signUpWithPassword({
-      email,
-      password,
-    })
-
+    // ── Log in ─────────────────────────────────────────────────────────────
+    const { error } = await signInWithPassword({ email, password })
     if (error) {
       setErrorMessage(error)
       setIsSubmitting(false)
       return
     }
-
     setIsSubmitting(false)
-
-    if (requiresEmailConfirmation) {
-      setSuccessMessage(
-        "Account created. Check your email for a confirmation link, then log in."
-      )
-      return
-    }
-
     onAuthSuccess?.()
   }
 
   return (
     <Card className={cn("border-border/80 bg-card/95 shadow-lg", className)}>
       <CardHeader className="space-y-4">
-        <div className="inline-flex rounded-md border border-border/70 bg-muted/70 p-1">
+        {isForgotPassword ? (
+          // Forgot-password: replace tab strip with a back link
           <button
-            className={cn(
-              "rounded px-3 py-1.5 text-sm font-medium transition-colors",
-              activeTab === "login"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            )}
-            onClick={() => setActiveTab("login")}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setView("login")}
             type="button"
           >
-            Log in
+            <ArrowLeft className="size-3.5" />
+            Back to sign in
           </button>
-          <button
-            className={cn(
-              "rounded px-3 py-1.5 text-sm font-medium transition-colors",
-              activeTab === "signup"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            )}
-            onClick={() => setActiveTab("signup")}
-            type="button"
-          >
-            Sign up
-          </button>
-        </div>
+        ) : (
+          <div className="inline-flex rounded-md border border-border/70 bg-muted/70 p-1">
+            <button
+              className={cn(
+                "rounded px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "login"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+              )}
+              onClick={() => setView("login")}
+              type="button"
+            >
+              Log in
+            </button>
+            <button
+              className={cn(
+                "rounded px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "signup"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+              )}
+              onClick={() => setView("signup")}
+              type="button"
+            >
+              Sign up
+            </button>
+          </div>
+        )}
+
         <div>
-          <CardTitle>{activeContent.heading}</CardTitle>
+          <CardTitle>
+            {isForgotPassword ? "Reset your password" : activeContent.heading}
+          </CardTitle>
           <CardDescription className="pt-1">
-            {activeContent.description}
+            {isForgotPassword
+              ? "Enter your email and we'll send you a link to reset your password."
+              : activeContent.description}
           </CardDescription>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <form className="space-y-4" onSubmit={handleSubmit}>
+          {/* Email — always visible */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="auth-email">
               Email
@@ -166,36 +222,59 @@ export function AuthCard({
               value={email}
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="auth-password">
-              Password
-            </label>
-            <Input
-              autoComplete={
-                activeTab === "login" ? "current-password" : "new-password"
-              }
-              disabled={isFormDisabled}
-              id="auth-password"
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
-              required
-              type="password"
-              value={password}
-            />
-          </div>
+
+          {/* Password — hidden on forgot-password view */}
+          {!isForgotPassword && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium" htmlFor="auth-password">
+                  Password
+                </label>
+                {view === "login" && (
+                  <button
+                    className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => setView("forgot-password")}
+                    type="button"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <Input
+                autoComplete={
+                  view === "login" ? "current-password" : "new-password"
+                }
+                disabled={isFormDisabled}
+                id="auth-password"
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={
+                  view === "signup"
+                    ? `At least ${MIN_PASSWORD_LENGTH} characters`
+                    : "Enter your password"
+                }
+                required
+                type="password"
+                value={password}
+              />
+            </div>
+          )}
+
           <Button className="w-full" disabled={isFormDisabled} type="submit">
             {submitLabel}
           </Button>
+
           {errorMessage ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {errorMessage}
             </p>
           ) : null}
+
           {successMessage ? (
             <p className="rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-xs text-[hsl(var(--success-foreground))]">
               {successMessage}
             </p>
           ) : null}
+
           {!isConfigured ? (
             <p className="text-xs text-muted-foreground">
               Authentication actions are disabled until Supabase env vars are
@@ -203,37 +282,6 @@ export function AuthCard({
             </p>
           ) : null}
         </form>
-        <div className="relative py-1">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border/80" />
-          </div>
-          <p className="relative mx-auto w-fit bg-card px-2 text-xs text-muted-foreground">
-            or continue with
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button className="w-full" disabled type="button" variant="outline">
-            <svg
-              aria-hidden="true"
-              className="size-4"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M21.35 11.1h-9.17v2.92h5.27c-.23 1.53-1.78 4.48-5.27 4.48-3.17 0-5.74-2.63-5.74-5.88s2.57-5.88 5.74-5.88c1.81 0 3.02.77 3.71 1.43l2.53-2.43C16.8 4.22 14.68 3.25 12.18 3.25 7.23 3.25 3.2 7.28 3.2 12.23s4.03 8.98 8.98 8.98c5.18 0 8.62-3.64 8.62-8.77 0-.59-.07-1.03-.15-1.34z"
-                fill="currentColor"
-              />
-            </svg>
-            Google
-          </Button>
-          <Button className="w-full" disabled type="button" variant="outline">
-            <Github className="size-4" />
-            GitHub
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          OAuth sign-in is not enabled in this workspace yet.
-        </p>
       </CardContent>
     </Card>
   )

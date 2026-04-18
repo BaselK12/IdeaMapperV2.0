@@ -21,7 +21,7 @@ const { viewerTestMapId } = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, ".test-state.json"), "utf-8")
 ) as { viewerTestMapId: string }
 
-test("viewer sees read-only UI and cannot add nodes", async ({ page }) => {
+test("@smoke viewer sees read-only UI and cannot add nodes", async ({ page }) => {
   await loginAs(
     page,
     process.env.E2E_VIEWER_EMAIL!,

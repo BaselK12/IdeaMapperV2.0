@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom"
 
+import { ErrorBoundary } from "@/components/error-boundary"
 import { useAuth } from "@/features/auth/auth-context"
 import { isValidMapId } from "@/features/map-workspace/api/map-workspace-api"
 import { MapWorkspaceLoading } from "@/features/map-workspace/components/map-workspace-loading"
@@ -17,6 +18,16 @@ export function MapPage() {
 
   const mapWorkspaceQuery = useMapWorkspaceQuery(normalizedMapId, user?.id)
 
+  // ── 1. Auth loading ───────────────────────────────────────────────────────
+  // ProtectedRoute already gates on isLoading, so this is always false when
+  // MapPage renders via normal routing. Kept as defense-in-depth in case
+  // MapPage is ever rendered in a context without ProtectedRoute above it.
+  if (isAuthLoading) {
+    return <MapWorkspaceLoading />
+  }
+
+  // ── 2. Invalid map ID ─────────────────────────────────────────────────────
+  // Pure URL validation — deterministic, no network dependency.
   if (!hasValidMapId) {
     return (
       <MapWorkspaceState
@@ -30,14 +41,9 @@ export function MapPage() {
     )
   }
 
-  if (mapWorkspaceQuery.isLoading) {
-    return <MapWorkspaceLoading />
-  }
-
-  if (isAuthLoading) {
-    return <MapWorkspaceLoading />
-  }
-
+  // ── 3. No user ────────────────────────────────────────────────────────────
+  // Auth resolved but session is absent. ProtectedRoute redirects before
+  // reaching here; this guards against unusual render contexts.
   if (!user?.id) {
     return (
       <MapWorkspaceState
@@ -47,6 +53,17 @@ export function MapPage() {
     )
   }
 
+  // ── 4. Query pending ──────────────────────────────────────────────────────
+  // isPending covers both:
+  //   a) query enabled + actively fetching (status='pending', fetchStatus='fetching')
+  //   b) query disabled with no cached data (status='pending', fetchStatus='idle')
+  // Using isLoading (the v5 subset) would miss case (b) and could allow a
+  // brief render of the "no data" error state before the fetch completes.
+  if (mapWorkspaceQuery.isPending) {
+    return <MapWorkspaceLoading />
+  }
+
+  // ── 5. Query error ────────────────────────────────────────────────────────
   if (mapWorkspaceQuery.isError) {
     const error = mapWorkspaceQuery.error
     if (error instanceof MapWorkspaceLoadError) {
@@ -70,6 +87,9 @@ export function MapPage() {
     )
   }
 
+  // ── 6. No data (defensive) ────────────────────────────────────────────────
+  // After steps 4 and 5, status must be 'success', so data is always defined.
+  // This guard is kept as a narrowing hint for TypeScript and as a safety net.
   if (!mapWorkspaceQuery.data) {
     return (
       <MapWorkspaceState
@@ -79,5 +99,23 @@ export function MapPage() {
     )
   }
 
-  return <MapWorkspaceShell currentUser={user} map={mapWorkspaceQuery.data} />
+  // ── 7. Success ────────────────────────────────────────────────────────────
+  // A tighter ErrorBoundary wraps the workspace shell so that runtime errors
+  // inside the map editor show a recovery UI rather than crashing the whole
+  // app. The boundary is keyed on mapId so navigating to a different map
+  // always resets a previously-errored boundary.
+  return (
+    <ErrorBoundary
+      fallback={
+        <MapWorkspaceState
+          detail="An unexpected error occurred in the map editor."
+          onRetry={() => window.location.reload()}
+          variant="error"
+        />
+      }
+      key={normalizedMapId}
+    >
+      <MapWorkspaceShell currentUser={user} map={mapWorkspaceQuery.data} />
+    </ErrorBoundary>
+  )
 }

@@ -4,7 +4,9 @@ import { useAuth } from "@/features/auth/auth-context"
 
 export function ProtectedRoute() {
   const location = useLocation()
-  const { isAuthenticated, isLoading } = useAuth()
+  // isLoading is guaranteed to resolve within BOOTSTRAP_TIMEOUT_MS (see auth-context).
+  // It will not hang indefinitely even if the Supabase backend is unreachable.
+  const { isAuthenticated, isConfigured, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -14,7 +16,7 @@ export function ProtectedRoute() {
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isConfigured || !isAuthenticated) {
     return (
       <Navigate
         replace

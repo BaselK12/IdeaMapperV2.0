@@ -2,6 +2,7 @@ import { ArrowLeft, Sparkles } from "lucide-react"
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
 
 import { AuthCard } from "@/components/auth/auth-card"
+import { PublicFooter } from "@/components/layout/public-footer"
 import { SupabaseWarning } from "@/components/supabase/supabase-warning"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/auth-context"
@@ -26,7 +27,7 @@ export function AuthPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate replace to="/app" />
+    return <Navigate replace to={from} />
   }
 
   return (
@@ -104,6 +105,8 @@ export function AuthPage() {
             />
           </div>
         </div>
+
+        <PublicFooter />
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ import workspaceDarkScreenshot from "@/assets/landing/landing-workspace-dark.png
 import workspaceLightScreenshot from "@/assets/landing/landing-workspace-light.png"
 import { AuthModal } from "@/components/auth/auth-modal"
 import { type AuthTab } from "@/components/auth/auth-card"
+import { PublicFooter } from "@/components/layout/public-footer"
 import { SupabaseWarning } from "@/components/supabase/supabase-warning"
 import { useTheme } from "@/components/theme/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -390,6 +391,8 @@ export function LandingPage() {
           </div>
         </section>
       </main>
+
+      <PublicFooter />
 
       <AuthModal
         defaultTab={authDefaultTab}

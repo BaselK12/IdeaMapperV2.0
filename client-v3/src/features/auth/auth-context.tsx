@@ -9,7 +9,13 @@ import {
 } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 
-import { hasSupabaseEnv, supabase } from "@/lib/supabase"
+import { hasSupabaseEnv, normalizeAuthError, supabase } from "@/lib/supabase"
+
+// If neither getSession() nor onAuthStateChange fires within this window,
+// we force isLoading → false so the app is never stuck on "Checking session…".
+// 8 s gives ample time for a healthy project while keeping degraded-mode UX
+// tolerable (e.g. paused Supabase free-tier project returning 503).
+const BOOTSTRAP_TIMEOUT_MS = 8_000
 
 type AuthResult = {
   error: string | null
@@ -61,21 +67,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     let isMounted = true
 
-    const initializeSession = async () => {
-      const { data, error } = await supabase.auth.getSession()
-
-      if (!isMounted) {
-        return
-      }
-
-      if (error) {
-        console.error("[V3] Failed to initialize auth session:", error.message)
+    // Belt-and-suspenders timeout: if the SDK's initial session check never
+    // resolves (e.g. the backend is returning 503 and the SDK is stuck
+    // waiting for a token-refresh response), we unblock the UI after
+    // BOOTSTRAP_TIMEOUT_MS so users can still reach the sign-in form.
+    const bootstrapTimer = setTimeout(() => {
+      if (isMounted) {
+        console.warn("[V3] Auth bootstrap timed out — treating as unauthenticated.")
         setSession(null)
-      } else {
-        setSession(data.session)
+        setIsLoading(false)
       }
+    }, BOOTSTRAP_TIMEOUT_MS)
 
-      setIsLoading(false)
+    const initializeSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+
+        if (!isMounted) return
+
+        if (error) {
+          console.error("[V3] Failed to initialize auth session:", error.message)
+          setSession(null)
+        } else {
+          setSession(data.session)
+        }
+      } catch (err) {
+        // getSession() should not throw, but guard anyway.
+        if (isMounted) {
+          console.error("[V3] Auth session threw unexpectedly:", err)
+          setSession(null)
+        }
+      } finally {
+        if (isMounted) {
+          clearTimeout(bootstrapTimer)
+          setIsLoading(false)
+        }
+      }
     }
 
     void initializeSession()
@@ -83,12 +110,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isMounted) return
+      // onAuthStateChange fires INITIAL_SESSION before getSession() resolves
+      // in the typical case, so this clears the timer early and unblocks the UI.
+      clearTimeout(bootstrapTimer)
       setSession(nextSession)
       setIsLoading(false)
     })
 
     return () => {
       isMounted = false
+      clearTimeout(bootstrapTimer)
       subscription.unsubscribe()
     }
   }, [])
@@ -108,7 +140,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSession(data.session)
       }
 
-      return { error: error?.message ?? null }
+      return { error: error ? normalizeAuthError(error.message) : null }
     },
     []
   )
@@ -129,7 +161,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         return {
-          error: error.message,
+          error: normalizeAuthError(error.message),
           requiresEmailConfirmation: false,
         }
       }
@@ -157,7 +189,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(null)
     }
 
-    return { error: error?.message ?? null }
+    return { error: error ? normalizeAuthError(error.message) : null }
   }, [])
 
   const value = useMemo<AuthContextValue>(

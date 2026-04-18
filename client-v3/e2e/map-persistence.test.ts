@@ -27,7 +27,7 @@ const { persistTestMapId } = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, ".test-state.json"), "utf-8")
 ) as { persistTestMapId: string }
 
-test("node added to a map persists across reload", async ({ page }) => {
+test("@smoke node added to a map persists across reload", async ({ page }) => {
   // ── Capture all Supabase REST requests for diagnostics ────────────────
   const supabaseRequests: string[] = []
   page.on("request", (req) => {
