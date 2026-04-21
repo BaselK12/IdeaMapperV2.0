@@ -1,4 +1,13 @@
-import type { MapEditorEdge, MapEditorNode, MapEditorNodeData } from "@/features/map-editor/types/map-editor-types"
+import type {
+  MapEditorEdge,
+  MapEditorEdgeData,
+  MapEditorNode,
+  MapEditorNodeColor,
+  MapEditorNodeData,
+  MapEditorNodeKind,
+  MapEditorNodeMedia,
+  MapEditorNodeMediaType,
+} from "@/features/map-editor/types/map-editor-types"
 
 type UnknownRecord = Record<string, unknown>
 
@@ -13,6 +22,29 @@ const TRANSIENT_NODE_KEYS = new Set([
 ])
 
 const TRANSIENT_EDGE_KEYS = new Set(["selected"])
+
+export const MAP_EDITOR_NODE_COLORS: MapEditorNodeColor[] = [
+  "violet",
+  "sky",
+  "emerald",
+  "amber",
+  "rose",
+  "slate",
+]
+
+export const MAP_EDITOR_NODE_KINDS: MapEditorNodeKind[] = [
+  "idea",
+  "question",
+  "task",
+  "decision",
+  "resource",
+]
+
+const MAP_EDITOR_NODE_MEDIA_TYPES: MapEditorNodeMediaType[] = [
+  "image",
+  "link",
+  "video",
+]
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -29,6 +61,75 @@ function asNonEmptyString(value: unknown) {
 
   const normalized = value.trim()
   return normalized.length > 0 ? normalized : null
+}
+
+function asOptionalString(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+export function normalizeNodeColor(value: unknown): MapEditorNodeColor {
+  return typeof value === "string" &&
+    MAP_EDITOR_NODE_COLORS.includes(value as MapEditorNodeColor)
+    ? (value as MapEditorNodeColor)
+    : "violet"
+}
+
+export function normalizeNodeKind(value: unknown): MapEditorNodeKind {
+  return typeof value === "string" &&
+    MAP_EDITOR_NODE_KINDS.includes(value as MapEditorNodeKind)
+    ? (value as MapEditorNodeKind)
+    : "idea"
+}
+
+export function normalizeNodeMedia(value: unknown): MapEditorNodeMedia | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const type =
+    typeof value.type === "string" &&
+    MAP_EDITOR_NODE_MEDIA_TYPES.includes(value.type as MapEditorNodeMediaType)
+      ? (value.type as MapEditorNodeMediaType)
+      : null
+  const url = asNonEmptyString(value.url)
+
+  if (!type || !url) {
+    return null
+  }
+
+  const title = asOptionalString(value.title)
+
+  return {
+    ...(title ? { title } : {}),
+    type,
+    url,
+  }
+}
+
+function normalizeEdgeData(value: unknown): MapEditorEdgeData {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  const note = asOptionalString(value.note)
+  const link = asOptionalString(value.link)
+  const edgeData: MapEditorEdgeData = {
+    ...value,
+  }
+
+  if (link) {
+    edgeData.link = link
+  } else {
+    delete edgeData.link
+  }
+
+  if (note) {
+    edgeData.note = note
+  } else {
+    delete edgeData.note
+  }
+
+  return edgeData
 }
 
 function ensureUniqueId(candidate: string, usedIds: Set<string>) {
@@ -120,6 +221,10 @@ export function normalizeLoadedNodes(rawNodes: unknown): MapEditorNode[] {
     const title = getNodeTitleFromRecord(rawData, `Node ${index + 1}`)
     const data: MapEditorNodeData = {
       ...rawData,
+      collapsed: rawData.collapsed === true,
+      color: normalizeNodeColor(rawData.color),
+      kind: normalizeNodeKind(rawData.kind),
+      media: normalizeNodeMedia(rawData.media),
       title,
     }
     delete (data as UnknownRecord).label
@@ -156,6 +261,7 @@ export function normalizeLoadedEdges(rawEdges: unknown): MapEditorEdge[] {
     return [
       {
         ...(rawRecord as Partial<MapEditorEdge>),
+        data: normalizeEdgeData(rawRecord.data),
         id,
         source,
         target,
@@ -181,6 +287,10 @@ function serializeNode(node: MapEditorNode) {
 
   const nodeData: UnknownRecord = {
     ...rawData,
+    collapsed: rawData.collapsed === true,
+    color: normalizeNodeColor(rawData.color),
+    kind: normalizeNodeKind(rawData.kind),
+    media: normalizeNodeMedia(rawData.media),
     title,
   }
   delete nodeData.label
@@ -199,7 +309,10 @@ function serializeNode(node: MapEditorNode) {
 
 function serializeEdge(edge: MapEditorEdge) {
   const rawEdge = stripKeys(edge as unknown as UnknownRecord, TRANSIENT_EDGE_KEYS)
-  return removeUndefinedDeep(rawEdge)
+  return removeUndefinedDeep({
+    ...rawEdge,
+    data: normalizeEdgeData(rawEdge.data),
+  })
 }
 
 export function toPersistedGraph(nodes: MapEditorNode[], edges: MapEditorEdge[]) {
@@ -262,7 +375,11 @@ export function createNewNode(
     : fallbackPosition
 
   return {
-    data: { title: `Node ${id}` },
+    data: {
+      color: "violet",
+      kind: "idea",
+      title: `New idea ${id}`,
+    },
     id,
     position: nextPosition,
     style: {

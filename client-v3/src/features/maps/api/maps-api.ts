@@ -6,6 +6,8 @@ import {
   type JoinMapOutcome,
   type JoinMapPayload,
   JoinMapFlowError,
+  type UpdatedMapDetails,
+  type UpdateMapDetailsPayload,
 } from "@/features/maps/types/maps-types"
 
 type MapParticipantRow = {
@@ -19,6 +21,13 @@ type MapRecord = {
   last_edited: string | null
   name: string | null
   owner_id: string | null
+}
+
+type UpdatedMapDetailsRecord = {
+  description: string | null
+  id: string
+  last_edited: string | null
+  name: string | null
 }
 
 export type MapHeader = {
@@ -36,6 +45,32 @@ function isInvalidUuidError(error: { code?: string; message?: string } | null) {
 
 function isMapLimitError(error: { code?: string; message?: string } | null) {
   return (error?.message ?? "").startsWith("map_limit_reached")
+}
+
+function normalizeMapWriteError(
+  error: { code?: string; message?: string } | null,
+  fallback: string
+) {
+  if (!error) {
+    return fallback
+  }
+
+  const message = error.message?.toLowerCase() ?? ""
+
+  if (
+    error.code === "42501" ||
+    message.includes("permission") ||
+    message.includes("not allowed") ||
+    message.includes("forbidden")
+  ) {
+    return "You do not have permission to manage this map."
+  }
+
+  if (isInvalidUuidError(error)) {
+    return invalidUuidMessage
+  }
+
+  return error.message || fallback
 }
 
 function sortByLastEditedDesc(a: AccessibleMap, b: AccessibleMap) {
@@ -98,6 +133,75 @@ export async function createMap(payload: CreateMapPayload): Promise<string> {
   }
 
   return data
+}
+
+export async function updateMapDetails(
+  payload: UpdateMapDetailsPayload
+): Promise<UpdatedMapDetails> {
+  const normalizedMapId = payload.mapId.trim()
+  const normalizedName = payload.name.trim()
+
+  if (!normalizedName) {
+    throw new Error("Map name is required.")
+  }
+
+  const { data, error } = await supabase
+    .from("maps")
+    .update({
+      description: payload.description?.trim() || "",
+      last_edited: new Date().toISOString(),
+      name: normalizedName,
+    })
+    .eq("id", normalizedMapId)
+    .select("id,name,description,last_edited")
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(normalizeMapWriteError(error, "Failed to update map."))
+  }
+
+  if (!data) {
+    throw new Error("Map details were not updated. Check your access and try again.")
+  }
+
+  const row = data as UpdatedMapDetailsRecord
+  return {
+    description: row.description ?? "",
+    id: row.id,
+    lastEdited: row.last_edited,
+    name: row.name?.trim() || "Untitled",
+  }
+}
+
+export async function deleteMapById(mapId: string) {
+  const normalizedMapId = mapId.trim()
+
+  const { data, error } = await supabase
+    .from("maps")
+    .delete()
+    .eq("id", normalizedMapId)
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(normalizeMapWriteError(error, "Failed to delete map."))
+  }
+
+  if (!data) {
+    throw new Error("Only the owner can delete this map.")
+  }
+}
+
+export async function leaveMapById(mapId: string, userId: string) {
+  const { error } = await supabase
+    .from("map_participants")
+    .delete()
+    .eq("map_id", mapId.trim())
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(normalizeMapWriteError(error, "Failed to leave map."))
+  }
 }
 
 export async function joinMapWithVerification(

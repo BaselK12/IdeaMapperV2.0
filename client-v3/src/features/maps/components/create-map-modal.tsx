@@ -50,7 +50,7 @@ export function CreateMapModal({
       description="Create a map and jump straight into the workspace."
       onClose={onClose}
       open={open}
-      title="New Map"
+      title="New map"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="rounded-xl border border-primary/20 bg-primary-soft/35 px-3 py-2">
@@ -69,7 +69,7 @@ export function CreateMapModal({
             id="new-map-name"
             maxLength={120}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Product Strategy Q2"
+            placeholder="Project roadmap"
             required
             value={name}
           />
@@ -85,7 +85,7 @@ export function CreateMapModal({
             id="new-map-description"
             maxLength={500}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="Optional context for collaborators."
+            placeholder="Goal, audience, or a quick note for collaborators."
             value={description}
           />
         </div>
@@ -106,7 +106,7 @@ export function CreateMapModal({
             Cancel
           </Button>
           <Button disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Creating..." : "Create Map"}
+            {isSubmitting ? "Creating..." : "Create map"}
           </Button>
         </div>
       </form>

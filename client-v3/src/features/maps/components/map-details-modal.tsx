@@ -1,105 +1,105 @@
 import { useState, type FormEvent } from "react"
-import { Link2 } from "lucide-react"
+import { PencilLine } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ModalFrame } from "@/features/maps/components/modal-frame"
 
-export type JoinMapFormValues = {
-  mapId: string
-  mapName: string
+export type MapDetailsFormValues = {
+  description: string
+  name: string
 }
 
-type JoinMapModalProps = {
+type MapDetailsModalProps = {
+  description: string
   errorMessage: string | null
-  infoMessage: string | null
+  initialDescription: string
+  initialName: string
   isSubmitting: boolean
   onClose: () => void
-  onSubmit: (values: JoinMapFormValues) => Promise<void>
+  onSubmit: (values: MapDetailsFormValues) => Promise<void>
   open: boolean
+  submitLabel?: string
+  title: string
 }
 
-const uuidPattern =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}/i
-
-function extractInviteCode(value: string) {
-  const normalizedValue = value.trim()
-  const match = normalizedValue.match(uuidPattern)
-  return match?.[0] ?? normalizedValue
-}
-
-export function JoinMapModal({
+export function MapDetailsModal({
+  description,
   errorMessage,
-  infoMessage,
+  initialDescription,
+  initialName,
   isSubmitting,
   onClose,
   onSubmit,
   open,
-}: JoinMapModalProps) {
-  const [mapName, setMapName] = useState("")
-  const [mapId, setMapId] = useState("")
+  submitLabel = "Save changes",
+  title,
+}: MapDetailsModalProps) {
+  const [name, setName] = useState(initialName)
+  const [mapDescription, setMapDescription] = useState(initialDescription)
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    const inviteCode = extractInviteCode(mapId)
-
-    if (!mapName.trim() || !inviteCode.trim()) {
-      setValidationMessage("Please provide the map name and invite code.")
+    if (!name.trim()) {
+      setValidationMessage("Map name is required.")
       return
     }
 
     setValidationMessage(null)
-
     await onSubmit({
-      mapId: inviteCode,
-      mapName,
+      description: mapDescription,
+      name,
     })
   }
 
   return (
     <ModalFrame
-      description="Use the map name and invite code shared by the owner."
+      description={description}
       onClose={onClose}
       open={open}
-      title="Join map"
+      title={title}
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="rounded-xl border border-primary/20 bg-primary-soft/35 px-3 py-2">
           <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
-            <Link2 className="size-3.5" />
-            Join with invite details
+            <PencilLine className="size-3.5" />
+            Map details
           </p>
         </div>
 
         <div className="space-y-2.5">
-          <label className="text-sm font-medium text-foreground" htmlFor="join-map-name">
+          <label className="text-sm font-medium text-foreground" htmlFor="map-details-name">
             Map name
           </label>
           <Input
             autoFocus
-            id="join-map-name"
+            id="map-details-name"
             maxLength={120}
-            onChange={(event) => setMapName(event.target.value)}
+            onChange={(event) => setName(event.target.value)}
             placeholder="Project roadmap"
-            value={mapName}
+            required
+            value={name}
           />
         </div>
 
         <div className="space-y-2.5">
-          <label className="text-sm font-medium text-foreground" htmlFor="join-map-id">
-            Invite code or link
+          <label
+            className="text-sm font-medium text-foreground"
+            htmlFor="map-details-description"
+          >
+            Description
+            <span className="ml-2 text-xs text-muted-foreground">Optional</span>
           </label>
-          <Input
-            id="join-map-id"
-            onChange={(event) => setMapId(event.target.value)}
-            placeholder="Paste an invite code or Branchly map link"
-            value={mapId}
+          <textarea
+            className="flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+            id="map-details-description"
+            maxLength={500}
+            onChange={(event) => setMapDescription(event.target.value)}
+            placeholder="Add context, goals, or the audience for this map."
+            value={mapDescription}
           />
-          <p className="text-xs text-muted-foreground">
-            Invite codes look like a long code; pasted map links work too.
-          </p>
         </div>
 
         {validationMessage ? (
@@ -112,18 +112,13 @@ export function JoinMapModal({
             {errorMessage}
           </p>
         ) : null}
-        {infoMessage ? (
-          <p className="rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-sm text-[hsl(var(--success-foreground))]">
-            {infoMessage}
-          </p>
-        ) : null}
 
         <div className="flex items-center justify-end gap-2">
           <Button onClick={onClose} type="button" variant="ghost">
             Cancel
           </Button>
           <Button disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Joining..." : "Join map"}
+            {isSubmitting ? "Saving..." : submitLabel}
           </Button>
         </div>
       </form>

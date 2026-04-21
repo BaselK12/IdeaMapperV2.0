@@ -4,9 +4,18 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react"
-import { Sparkles } from "lucide-react"
+import {
+  LocateFixed,
+  Network,
+  Plus,
+  Redo2,
+  RotateCcw,
+  Sparkles,
+  Undo2,
+} from "lucide-react"
 import ReactFlow, {
   Background,
   Controls,
@@ -119,7 +128,9 @@ export type MapEditorRemoteNodeDrag = {
 }
 
 type MapEditorCanvasProps = {
+  canRedo: boolean
   canEdit: boolean
+  canUndo: boolean
   edges: MapEditorEdge[]
   focusRequest: MapEditorCanvasFocusRequest | null
   hasSelection: boolean
@@ -132,11 +143,15 @@ type MapEditorCanvasProps = {
   onDeleteSelection: () => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onNodesChange: (changes: NodeChange[]) => void
+  onOrganizeMap: () => void
+  onRedo: () => void
   onCursorPositionChange?: (position: XYPosition) => void
   onNodeDragEnd?: (nodeId: string) => void
   onNodeDragPositionChange?: (nodeId: string, position: XYPosition) => void
   onRetryLoad: () => void
   onSelectionChange: (selection: OnSelectionChangeParams) => void
+  onUndo: () => void
+  onUpdateNodeTitle: (nodeId: string, title: string) => void
   remoteCursors?: MapEditorRemoteCursor[]
   remoteNodeDrags?: MapEditorRemoteNodeDrag[]
 }
@@ -183,7 +198,9 @@ function remoteNodeBadgeCopy(username: string) {
 }
 
 export function MapEditorCanvas({
+  canRedo,
   canEdit,
+  canUndo,
   edges,
   focusRequest,
   hasSelection,
@@ -196,11 +213,15 @@ export function MapEditorCanvas({
   onDeleteSelection,
   onEdgesChange,
   onNodesChange,
+  onOrganizeMap,
+  onRedo,
   onCursorPositionChange,
   onNodeDragEnd,
   onNodeDragPositionChange,
   onRetryLoad,
   onSelectionChange,
+  onUndo,
+  onUpdateNodeTitle,
   remoteCursors = [],
   remoteNodeDrags = [],
 }: MapEditorCanvasProps) {
@@ -212,6 +233,9 @@ export function MapEditorCanvas({
     y: 0,
     zoom: 1,
   })
+  const [inlineEditingNodeId, setInlineEditingNodeId] = useState<string | null>(
+    null
+  )
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowRef.current = instance
@@ -285,6 +309,57 @@ export function MapEditorCanvas({
     })
   }, [canEdit, onAddNode])
 
+  const handleFitView = useCallback(() => {
+    reactFlowRef.current?.fitView({
+      duration: 260,
+      padding: 0.24,
+    })
+  }, [])
+
+  const handleResetView = useCallback(() => {
+    reactFlowRef.current?.setViewport(
+      {
+        x: 0,
+        y: 0,
+        zoom: 1,
+      },
+      { duration: 260 }
+    )
+  }, [])
+
+  const handleCanvasDoubleClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!canEdit || !reactFlowRef.current) {
+        return
+      }
+
+      if (!(event.target instanceof Element)) {
+        return
+      }
+
+      if (
+        event.target.closest(
+          ".react-flow__node, .react-flow__edge, .react-flow__controls, .react-flow__minimap"
+        )
+      ) {
+        return
+      }
+
+      event.preventDefault()
+
+      const nextPosition = reactFlowRef.current.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      })
+
+      onAddNode({
+        x: nextPosition.x - 90,
+        y: nextPosition.y - 40,
+      })
+    },
+    [canEdit, onAddNode]
+  )
+
   useEffect(() => {
     if (isLoading) {
       hasInitialFitRef.current = false
@@ -334,15 +409,7 @@ export function MapEditorCanvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!canEdit || !hasSelection) {
-        return
-      }
-
       if (event.defaultPrevented) {
-        return
-      }
-
-      if (event.key !== "Backspace" && event.key !== "Delete") {
         return
       }
 
@@ -350,21 +417,95 @@ export function MapEditorCanvas({
         return
       }
 
-      event.preventDefault()
-      onDeleteSelection()
+      const normalizedKey = event.key.toLowerCase()
+      const usesModifier = event.ctrlKey || event.metaKey
+
+      if (canEdit && usesModifier && normalizedKey === "z") {
+        event.preventDefault()
+        if (event.shiftKey) {
+          onRedo()
+          return
+        }
+
+        onUndo()
+        return
+      }
+
+      if (canEdit && (usesModifier && normalizedKey === "y")) {
+        event.preventDefault()
+        onRedo()
+        return
+      }
+
+      if (canEdit && hasSelection && (event.key === "Backspace" || event.key === "Delete")) {
+        event.preventDefault()
+        onDeleteSelection()
+        return
+      }
+
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        return
+      }
+
+      if (canEdit && normalizedKey === "n") {
+        event.preventDefault()
+        handleAddNode()
+        return
+      }
+
+      if (canEdit && normalizedKey === "o") {
+        event.preventDefault()
+        onOrganizeMap()
+        return
+      }
+
+      if (normalizedKey === "f") {
+        event.preventDefault()
+        handleFitView()
+        return
+      }
+
+      if (event.key === "0") {
+        event.preventDefault()
+        handleResetView()
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => {
       window.removeEventListener("keydown", handleKeyDown)
     }
-  }, [canEdit, hasSelection, onDeleteSelection])
+  }, [
+    canEdit,
+    handleAddNode,
+    handleFitView,
+    handleResetView,
+    hasSelection,
+    onDeleteSelection,
+    onOrganizeMap,
+    onRedo,
+    onUndo,
+  ])
 
   const decoratedEdges = useMemo(
     () =>
       edges.map((edge) => ({
         ...edge,
         animated: Boolean(edge.selected),
+        label:
+          edge.label ||
+          (edge.data?.note || edge.data?.link ? "Details" : edge.label),
+        labelBgBorderRadius: 8,
+        labelBgPadding: [8, 4] as [number, number],
+        labelBgStyle: {
+          fill: "hsl(var(--card) / 0.96)",
+          stroke: "hsl(var(--border) / 0.9)",
+        },
+        labelStyle: {
+          fill: "hsl(var(--foreground))",
+          fontSize: 12,
+          fontWeight: 600,
+        },
         style: {
           ...edge.style,
           stroke: edge.selected
@@ -387,11 +528,10 @@ export function MapEditorCanvas({
   }, [remoteNodeDrags])
 
   const renderedNodes = useMemo(() => {
-    if (remoteNodeDragById.size === 0) {
-      return nodes
-    }
-
-    return nodes.map((node) => {
+    const nodesWithRemoteDrag =
+      remoteNodeDragById.size === 0
+        ? nodes
+        : nodes.map((node) => {
       const remoteNodeDrag = remoteNodeDragById.get(node.id)
       if (!remoteNodeDrag) {
         return node
@@ -422,7 +562,17 @@ export function MapEditorCanvas({
         },
       }
     })
-  }, [nodes, remoteNodeDragById])
+
+    return nodesWithRemoteDrag.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        isInlineEditing: inlineEditingNodeId === node.id,
+        onInlineEditComplete: () => setInlineEditingNodeId(null),
+        onInlineTitleChange: (title: string) => onUpdateNodeTitle(node.id, title),
+      },
+    }))
+  }, [inlineEditingNodeId, nodes, onUpdateNodeTitle, remoteNodeDragById])
 
   const renderedRemoteNodeDragBadges = useMemo(() => {
     const nextBadges: RenderedRemoteNodeDragBadge[] = []
@@ -485,9 +635,10 @@ export function MapEditorCanvas({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.45)_1px,transparent_0)] [background-size:22px_22px]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/50 via-transparent to-background/60" />
 
-      <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+      <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2">
         {canEdit ? (
           <Button onClick={handleAddNode} size="sm" variant="secondary">
+            <Plus className="size-4" />
             Add node
           </Button>
         ) : null}
@@ -501,6 +652,66 @@ export function MapEditorCanvas({
             Delete selection
           </Button>
         ) : null}
+        {canEdit ? (
+          <Button
+            aria-label="Undo latest change"
+            disabled={!canUndo}
+            onClick={onUndo}
+            size="sm"
+            title="Undo latest change"
+            type="button"
+            variant="outline"
+          >
+            <Undo2 className="size-4" />
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button
+            aria-label="Redo latest change"
+            disabled={!canRedo}
+            onClick={onRedo}
+            size="sm"
+            title="Redo latest change"
+            type="button"
+            variant="outline"
+          >
+            <Redo2 className="size-4" />
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button
+            disabled={nodes.length < 2}
+            onClick={onOrganizeMap}
+            size="sm"
+            title="Arrange nodes into connected columns"
+            type="button"
+            variant="outline"
+          >
+            <Network className="size-4" />
+            Organize
+          </Button>
+        ) : null}
+        <Button
+          aria-label="Fit map to screen"
+          onClick={handleFitView}
+          size="sm"
+          title="Fit map to screen"
+          type="button"
+          variant="outline"
+        >
+          <LocateFixed className="size-4" />
+          Fit
+        </Button>
+        <Button
+          aria-label="Reset view"
+          onClick={handleResetView}
+          size="sm"
+          title="Reset view"
+          type="button"
+          variant="outline"
+        >
+          <RotateCcw className="size-4" />
+        </Button>
       </div>
 
       <div
@@ -530,9 +741,17 @@ export function MapEditorCanvas({
           nodesConnectable={canEdit}
           nodesDraggable={canEdit}
           onConnect={onConnect}
+          onDoubleClick={handleCanvasDoubleClick}
           onEdgesChange={onEdgesChange}
           onInit={handleFlowInit}
           onMove={handleViewportMove}
+          onNodeDoubleClick={(_event, node) => {
+            if (!canEdit) {
+              return
+            }
+
+            setInlineEditingNodeId(node.id)
+          }}
           onNodeDrag={(_event, node) => handleNodeDrag(node as MapEditorFlowNode)}
           onNodeDragStop={(_event, node) =>
             handleNodeDragStop(node as MapEditorFlowNode)
@@ -542,6 +761,7 @@ export function MapEditorCanvas({
           onSelectionChange={onSelectionChange}
           proOptions={{ hideAttribution: true }}
           selectionOnDrag
+          zoomOnDoubleClick={false}
         >
           <MiniMap
             className="!rounded-xl"
@@ -637,7 +857,7 @@ export function MapEditorCanvas({
               Empty canvas
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Start with one anchor idea and grow the map by connecting related nodes.
+              Double-click the canvas to drop an idea, then drag between handles to connect it.
             </p>
             {canEdit ? (
               <Button className="mt-4" onClick={handleAddNode} size="sm">

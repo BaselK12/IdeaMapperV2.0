@@ -39,7 +39,7 @@ function normalizeMapGraphError(error: { code?: string; message?: string } | nul
 
   const message = error.message?.toLowerCase() ?? ""
   if (error.code === "22P02" || message.includes("invalid input syntax for type uuid")) {
-    return "Map ID is invalid."
+    return "Map link is invalid."
   }
 
   if (

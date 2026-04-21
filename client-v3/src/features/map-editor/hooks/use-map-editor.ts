@@ -27,6 +27,9 @@ import { supabase } from "@/lib/supabase"
 import type {
   MapEditorEdge,
   MapEditorNode,
+  MapEditorNodeColor,
+  MapEditorNodeKind,
+  MapEditorNodeMedia,
   MapEditorSaveStatus,
   MapEditorSyncStatus,
   SelectedEdgeSummary,
@@ -39,6 +42,9 @@ import {
   getNodeTitleFromValue,
   normalizeLoadedEdges,
   normalizeLoadedNodes,
+  normalizeNodeColor,
+  normalizeNodeKind,
+  normalizeNodeMedia,
   toRoleCanEdit,
 } from "@/features/map-editor/utils/map-editor-graph"
 
@@ -49,6 +55,7 @@ type UseMapEditorParams = {
 
 const SAVE_DEBOUNCE_MS = 700
 const SELECTION_INVALIDATION_NOTICE_MS = 4800
+const GRAPH_HISTORY_LIMIT = 40
 
 type ReconciledGraphSelection = {
   edges: MapEditorEdge[]
@@ -67,6 +74,12 @@ type RemoteMapRow = {
 type RemoteGraphSnapshot = {
   edges: MapEditorEdge[]
   lastEdited: string | null
+  nodes: MapEditorNode[]
+  signature: string
+}
+
+type GraphHistorySnapshot = {
+  edges: MapEditorEdge[]
   nodes: MapEditorNode[]
   signature: string
 }
@@ -159,6 +172,38 @@ function toSelectionInvalidationMessage(params: {
   return null
 }
 
+function cloneGraph(nodes: MapEditorNode[], edges: MapEditorEdge[]) {
+  return {
+    edges: edges.map((edge) => ({
+      ...edge,
+      data: edge.data ? { ...edge.data } : edge.data,
+      style: edge.style ? { ...edge.style } : edge.style,
+    })),
+    nodes: nodes.map((node) => ({
+      ...node,
+      data: { ...node.data },
+      position: { ...node.position },
+      style: node.style ? { ...node.style } : node.style,
+    })),
+  }
+}
+
+function createHistorySnapshot(
+  nodes: MapEditorNode[],
+  edges: MapEditorEdge[]
+): GraphHistorySnapshot {
+  const snapshot = cloneGraph(nodes, edges)
+
+  return {
+    ...snapshot,
+    signature: createGraphSignature(snapshot.nodes, snapshot.edges),
+  }
+}
+
+function getEdgeTextField(value: unknown) {
+  return typeof value === "string" ? value : ""
+}
+
 function reconcileSelection(
   nodes: MapEditorNode[],
   edges: MapEditorEdge[],
@@ -227,6 +272,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   const [selectionInvalidationNotice, setSelectionInvalidationNotice] = useState<
     string | null
   >(null)
+  const [historyVersion, setHistoryVersion] = useState(0)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestNodesRef = useRef<MapEditorNode[]>([])
@@ -244,6 +290,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   const editorSessionRef = useRef(0)
   const canEditRef = useRef(canEdit)
   const isMountedRef = useRef(true)
+  const undoStackRef = useRef<GraphHistorySnapshot[]>([])
+  const redoStackRef = useRef<GraphHistorySnapshot[]>([])
 
   const graphQuery = useQuery({
     enabled: Boolean(mapId),
@@ -330,6 +378,49 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     []
   )
 
+  const bumpHistoryVersion = useCallback(() => {
+    if (!isMountedRef.current) {
+      return
+    }
+
+    setHistoryVersion((currentVersion) => currentVersion + 1)
+  }, [])
+
+  const clearGraphHistory = useCallback(() => {
+    undoStackRef.current = []
+    redoStackRef.current = []
+    bumpHistoryVersion()
+  }, [bumpHistoryVersion])
+
+  const pushUndoSnapshot = useCallback(
+    (nextNodes: MapEditorNode[], nextEdges: MapEditorEdge[]) => {
+      const currentNodes = latestNodesRef.current
+      const currentEdges = latestEdgesRef.current
+      const currentSignature = createGraphSignature(currentNodes, currentEdges)
+      const nextSignature = createGraphSignature(nextNodes, nextEdges)
+
+      if (currentSignature === nextSignature) {
+        return
+      }
+
+      const latestUndo =
+        undoStackRef.current.length > 0
+          ? undoStackRef.current[undoStackRef.current.length - 1]
+          : null
+
+      if (latestUndo?.signature !== currentSignature) {
+        undoStackRef.current = [
+          ...undoStackRef.current.slice(-(GRAPH_HISTORY_LIMIT - 1)),
+          createHistorySnapshot(currentNodes, currentEdges),
+        ]
+      }
+
+      redoStackRef.current = []
+      bumpHistoryVersion()
+    },
+    [bumpHistoryVersion]
+  )
+
   useEffect(() => {
     canEditRef.current = canEdit
   }, [canEdit])
@@ -400,6 +491,9 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     isPersistingRef.current = false
     shouldPersistAgainRef.current = false
     pendingRemoteGraphRef.current = null
+    undoStackRef.current = []
+    redoStackRef.current = []
+    setHistoryVersion((currentVersion) => currentVersion + 1)
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
@@ -459,6 +553,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     isHydratedRef.current = true
     isPersistingRef.current = false
     shouldPersistAgainRef.current = false
+    clearGraphHistory()
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
@@ -466,6 +561,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     }
   }, [
     canEdit,
+    clearGraphHistory,
     clearSelectionInvalidationNotice,
     graphQuery.data,
     setHasRemoteUpdateAvailableSafe,
@@ -557,9 +653,11 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       setSaveStatusSafe(canEditRef.current ? "saved" : "idle")
       setLastEditedSafe(snapshot.lastEdited)
       setHasRemoteUpdateAvailableSafe(false)
+      clearGraphHistory()
       publishSelectionInvalidationNotice(selectionInvalidationMessage)
     },
     [
+      clearGraphHistory,
       publishSelectionInvalidationNotice,
       setHasRemoteUpdateAvailableSafe,
       setLastEditedSafe,
@@ -774,9 +872,17 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
   )
 
   const queuePersist = useCallback(
-    (nextNodes: MapEditorNode[], nextEdges: MapEditorEdge[]) => {
+    (
+      nextNodes: MapEditorNode[],
+      nextEdges: MapEditorEdge[],
+      options: { recordHistory?: boolean } = {}
+    ) => {
       if (!canEditRef.current || !isHydratedRef.current) {
         return
+      }
+
+      if (options.recordHistory !== false) {
+        pushUndoSnapshot(nextNodes, nextEdges)
       }
 
       latestNodesRef.current = nextNodes
@@ -812,7 +918,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
         void persistLatestGraph(scheduleSession)
       }, SAVE_DEBOUNCE_MS)
     },
-    [persistLatestGraph, setSaveErrorSafe, setSaveStatusSafe]
+    [persistLatestGraph, pushUndoSnapshot, setSaveErrorSafe, setSaveStatusSafe]
   )
 
   const retrySave = useCallback(() => {
@@ -828,6 +934,84 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     shouldPersistAgainRef.current = false
     void persistLatestGraph(editorSessionRef.current)
   }, [canEdit, persistLatestGraph])
+
+  const applyLocalHistorySnapshot = useCallback(
+    (snapshot: GraphHistorySnapshot) => {
+      const nextGraph = reconcileSelection(
+        snapshot.nodes,
+        snapshot.edges,
+        selectedNodeIdRef.current,
+        selectedEdgeIdRef.current
+      )
+
+      latestNodesRef.current = nextGraph.nodes
+      latestEdgesRef.current = nextGraph.edges
+      setNodes(nextGraph.nodes)
+      setEdges(nextGraph.edges)
+      setSelectedNodeId(nextGraph.selectedNodeId)
+      setSelectedEdgeId(nextGraph.selectedEdgeId)
+      selectedNodeIdRef.current = nextGraph.selectedNodeId
+      selectedEdgeIdRef.current = nextGraph.selectedEdgeId
+      queuePersist(nextGraph.nodes, nextGraph.edges, { recordHistory: false })
+    },
+    [queuePersist]
+  )
+
+  const undoGraphChange = useCallback(() => {
+    if (!canEdit || undoStackRef.current.length === 0) {
+      return
+    }
+
+    clearSelectionInvalidationNotice()
+
+    const previousSnapshot = undoStackRef.current[undoStackRef.current.length - 1]
+    const currentSnapshot = createHistorySnapshot(
+      latestNodesRef.current,
+      latestEdgesRef.current
+    )
+
+    undoStackRef.current = undoStackRef.current.slice(0, -1)
+    redoStackRef.current = [
+      ...redoStackRef.current.slice(-(GRAPH_HISTORY_LIMIT - 1)),
+      currentSnapshot,
+    ]
+
+    applyLocalHistorySnapshot(previousSnapshot)
+    bumpHistoryVersion()
+  }, [
+    applyLocalHistorySnapshot,
+    bumpHistoryVersion,
+    canEdit,
+    clearSelectionInvalidationNotice,
+  ])
+
+  const redoGraphChange = useCallback(() => {
+    if (!canEdit || redoStackRef.current.length === 0) {
+      return
+    }
+
+    clearSelectionInvalidationNotice()
+
+    const nextSnapshot = redoStackRef.current[redoStackRef.current.length - 1]
+    const currentSnapshot = createHistorySnapshot(
+      latestNodesRef.current,
+      latestEdgesRef.current
+    )
+
+    redoStackRef.current = redoStackRef.current.slice(0, -1)
+    undoStackRef.current = [
+      ...undoStackRef.current.slice(-(GRAPH_HISTORY_LIMIT - 1)),
+      currentSnapshot,
+    ]
+
+    applyLocalHistorySnapshot(nextSnapshot)
+    bumpHistoryVersion()
+  }, [
+    applyLocalHistorySnapshot,
+    bumpHistoryVersion,
+    canEdit,
+    clearSelectionInvalidationNotice,
+  ])
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -1089,8 +1273,16 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     }
 
     return {
+      collapsed: foundNode.data?.collapsed === true,
+      color: normalizeNodeColor(foundNode.data?.color),
+      description:
+        typeof foundNode.data?.description === "string"
+          ? foundNode.data.description
+          : "",
       incomingEdgeCount: edges.filter((edge) => edge.target === foundNode.id).length,
       id: foundNode.id,
+      kind: normalizeNodeKind(foundNode.data?.kind),
+      media: normalizeNodeMedia(foundNode.data?.media),
       outgoingEdgeCount: edges.filter((edge) => edge.source === foundNode.id).length,
       position: {
         x: Math.round(foundNode.position.x),
@@ -1110,22 +1302,19 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
       return null
     }
 
-    const nextLabel =
-      typeof foundEdge.label === "string" && foundEdge.label.trim().length > 0
-        ? foundEdge.label
-        : null
-
     return {
       id: foundEdge.id,
-      label: nextLabel,
+      label: typeof foundEdge.label === "string" ? foundEdge.label : "",
+      link: getEdgeTextField(foundEdge.data?.link),
+      note: getEdgeTextField(foundEdge.data?.note),
       sourceNodeId: foundEdge.source,
       targetNodeId: foundEdge.target,
     }
   }, [edges, selectedEdgeId])
 
-  const updateSelectedNodeTitle = useCallback(
-    (nextTitle: string) => {
-      if (!canEdit || !selectedNodeId) {
+  const updateNodeTitle = useCallback(
+    (nodeId: string, nextTitle: string) => {
+      if (!canEdit) {
         return
       }
 
@@ -1133,7 +1322,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
         let didUpdate = false
 
         const nextNodes = currentNodes.map((node) => {
-          if (node.id !== selectedNodeId) {
+          if (node.id !== nodeId) {
             return node
           }
 
@@ -1160,7 +1349,275 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
         return nextNodes
       })
     },
+    [canEdit, queuePersist]
+  )
+
+  const updateSelectedNodeTitle = useCallback(
+    (nextTitle: string) => {
+      if (!selectedNodeId) {
+        return
+      }
+
+      updateNodeTitle(selectedNodeId, nextTitle)
+    },
+    [selectedNodeId, updateNodeTitle]
+  )
+
+  const updateSelectedNodeDescription = useCallback(
+    (nextDescription: string) => {
+      if (!canEdit || !selectedNodeId) {
+        return
+      }
+
+      setNodes((currentNodes) => {
+        let didUpdate = false
+
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node
+          }
+
+          const currentDescription =
+            typeof node.data?.description === "string"
+              ? node.data.description
+              : ""
+          if (currentDescription === nextDescription) {
+            return node
+          }
+
+          didUpdate = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              description: nextDescription,
+            },
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
+        return nextNodes
+      })
+    },
     [canEdit, queuePersist, selectedNodeId]
+  )
+
+  const updateSelectedNodeAppearance = useCallback(
+    (nextAppearance: {
+      color?: MapEditorNodeColor
+      kind?: MapEditorNodeKind
+    }) => {
+      if (!canEdit || !selectedNodeId) {
+        return
+      }
+
+      setNodes((currentNodes) => {
+        let didUpdate = false
+
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node
+          }
+
+          const nextColor =
+            nextAppearance.color === undefined
+              ? normalizeNodeColor(node.data?.color)
+              : normalizeNodeColor(nextAppearance.color)
+          const nextKind =
+            nextAppearance.kind === undefined
+              ? normalizeNodeKind(node.data?.kind)
+              : normalizeNodeKind(nextAppearance.kind)
+          const currentColor = normalizeNodeColor(node.data?.color)
+          const currentKind = normalizeNodeKind(node.data?.kind)
+
+          if (currentColor === nextColor && currentKind === nextKind) {
+            return node
+          }
+
+          didUpdate = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              color: nextColor,
+              kind: nextKind,
+            },
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
+        return nextNodes
+      })
+    },
+    [canEdit, queuePersist, selectedNodeId]
+  )
+
+  const updateSelectedNodeMedia = useCallback(
+    (nextMedia: MapEditorNodeMedia | null) => {
+      if (!canEdit || !selectedNodeId) {
+        return
+      }
+
+      const normalizedMedia = normalizeNodeMedia(nextMedia)
+
+      setNodes((currentNodes) => {
+        let didUpdate = false
+
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node
+          }
+
+          const currentMedia = normalizeNodeMedia(node.data?.media)
+          if (JSON.stringify(currentMedia) === JSON.stringify(normalizedMedia)) {
+            return node
+          }
+
+          didUpdate = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              media: normalizedMedia,
+            },
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
+        return nextNodes
+      })
+    },
+    [canEdit, queuePersist, selectedNodeId]
+  )
+
+  const updateSelectedNodeCollapsed = useCallback(
+    (nextCollapsed: boolean) => {
+      if (!canEdit || !selectedNodeId) {
+        return
+      }
+
+      setNodes((currentNodes) => {
+        let didUpdate = false
+
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node
+          }
+
+          const currentCollapsed = node.data?.collapsed === true
+          if (currentCollapsed === nextCollapsed) {
+            return node
+          }
+
+          didUpdate = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              collapsed: nextCollapsed,
+            },
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(nextNodes, latestEdgesRef.current)
+        }
+
+        return nextNodes
+      })
+    },
+    [canEdit, queuePersist, selectedNodeId]
+  )
+
+  const updateSelectedEdgeLabel = useCallback(
+    (nextLabel: string) => {
+      if (!canEdit || !selectedEdgeId) {
+        return
+      }
+
+      setEdges((currentEdges) => {
+        let didUpdate = false
+
+        const nextEdges = currentEdges.map((edge) => {
+          if (edge.id !== selectedEdgeId) {
+            return edge
+          }
+
+          const currentLabel = typeof edge.label === "string" ? edge.label : ""
+          if (currentLabel === nextLabel) {
+            return edge
+          }
+
+          didUpdate = true
+          return {
+            ...edge,
+            label: nextLabel,
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(latestNodesRef.current, nextEdges)
+        }
+
+        return nextEdges
+      })
+    },
+    [canEdit, queuePersist, selectedEdgeId]
+  )
+
+  const updateSelectedEdgeDetails = useCallback(
+    (nextDetails: { link?: string; note?: string }) => {
+      if (!canEdit || !selectedEdgeId) {
+        return
+      }
+
+      setEdges((currentEdges) => {
+        let didUpdate = false
+
+        const nextEdges = currentEdges.map((edge) => {
+          if (edge.id !== selectedEdgeId) {
+            return edge
+          }
+
+          const currentNote = getEdgeTextField(edge.data?.note)
+          const currentLink = getEdgeTextField(edge.data?.link)
+          const nextNote =
+            nextDetails.note === undefined ? currentNote : nextDetails.note
+          const nextLink =
+            nextDetails.link === undefined ? currentLink : nextDetails.link
+
+          if (currentNote === nextNote && currentLink === nextLink) {
+            return edge
+          }
+
+          didUpdate = true
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              link: nextLink,
+              note: nextNote,
+            },
+          }
+        })
+
+        if (didUpdate) {
+          queuePersist(latestNodesRef.current, nextEdges)
+        }
+
+        return nextEdges
+      })
+    },
+    [canEdit, queuePersist, selectedEdgeId]
   )
 
   const deleteSelection = useCallback(() => {
@@ -1215,16 +1672,133 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     selectedNodeId,
   ])
 
+  const organizeMap = useCallback(() => {
+    if (!canEdit || latestNodesRef.current.length === 0) {
+      return
+    }
+
+    const currentNodes = latestNodesRef.current
+    const currentEdges = latestEdgesRef.current
+    const nodeIds = new Set(currentNodes.map((node) => node.id))
+    const outgoingEdgesByNode = new Map<string, MapEditorEdge[]>()
+    const incomingCountByNode = new Map<string, number>()
+
+    for (const node of currentNodes) {
+      outgoingEdgesByNode.set(node.id, [])
+      incomingCountByNode.set(node.id, 0)
+    }
+
+    for (const edge of currentEdges) {
+      if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+        continue
+      }
+
+      outgoingEdgesByNode.get(edge.source)?.push(edge)
+      incomingCountByNode.set(
+        edge.target,
+        (incomingCountByNode.get(edge.target) ?? 0) + 1
+      )
+    }
+
+    const roots = currentNodes
+      .filter((node) => (incomingCountByNode.get(node.id) ?? 0) === 0)
+      .sort((firstNode, secondNode) =>
+        firstNode.position.y === secondNode.position.y
+          ? firstNode.position.x - secondNode.position.x
+          : firstNode.position.y - secondNode.position.y
+      )
+
+    const queue: MapEditorNode[] =
+      roots.length > 0 ? [...roots] : currentNodes[0] ? [currentNodes[0]] : []
+    const levelByNode = new Map<string, number>()
+
+    for (const root of queue) {
+      levelByNode.set(root.id, 0)
+    }
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const currentNode = queue[index]
+      const currentLevel = levelByNode.get(currentNode.id) ?? 0
+      const outgoingEdges = outgoingEdgesByNode.get(currentNode.id) ?? []
+
+      for (const edge of outgoingEdges) {
+        if (levelByNode.has(edge.target)) {
+          continue
+        }
+
+        const targetNode = currentNodes.find((node) => node.id === edge.target)
+        if (!targetNode) {
+          continue
+        }
+
+        levelByNode.set(targetNode.id, currentLevel + 1)
+        queue.push(targetNode)
+      }
+    }
+
+    const maxAssignedLevel =
+      levelByNode.size > 0 ? Math.max(...Array.from(levelByNode.values())) : 0
+    for (const node of currentNodes) {
+      if (!levelByNode.has(node.id)) {
+        levelByNode.set(node.id, maxAssignedLevel + 1)
+      }
+    }
+
+    const nodesByLevel = new Map<number, MapEditorNode[]>()
+    for (const node of currentNodes) {
+      const level = levelByNode.get(node.id) ?? 0
+      const levelNodes = nodesByLevel.get(level) ?? []
+      levelNodes.push(node)
+      nodesByLevel.set(level, levelNodes)
+    }
+
+    const positionByNode = new Map<string, XYPosition>()
+    for (const [level, levelNodes] of nodesByLevel.entries()) {
+      const sortedLevelNodes = [...levelNodes].sort((firstNode, secondNode) =>
+        firstNode.position.y === secondNode.position.y
+          ? firstNode.position.x - secondNode.position.x
+          : firstNode.position.y - secondNode.position.y
+      )
+      const verticalOffset = Math.max(0, (sortedLevelNodes.length - 1) * 76)
+
+      sortedLevelNodes.forEach((node, index) => {
+        positionByNode.set(node.id, {
+          x: 120 + level * 290,
+          y: 140 + index * 152 - verticalOffset,
+        })
+      })
+    }
+
+    const nextNodes = currentNodes.map((node) => {
+      const nextPosition = positionByNode.get(node.id)
+      if (!nextPosition) {
+        return node
+      }
+
+      return {
+        ...node,
+        position: nextPosition,
+      }
+    })
+
+    setNodes(nextNodes)
+    queuePersist(nextNodes, currentEdges)
+  }, [canEdit, queuePersist])
+
   const retryLoad = useCallback(() => {
     void graphQuery.refetch()
   }, [graphQuery])
 
   const hasSelection = Boolean(selectedNode || selectedEdge)
   const nodeCount = nodes.length
+  const canUndo = historyVersion >= 0 && undoStackRef.current.length > 0
+  const canRedo = historyVersion >= 0 && redoStackRef.current.length > 0
 
   return {
     addNode,
     canEdit,
+    canRedo,
+    canUndo,
     clearSelection,
     deleteSelection,
     edges,
@@ -1239,6 +1813,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     loadError: graphQuery.error instanceof Error ? graphQuery.error.message : null,
     nodes,
     nodeCount,
+    organizeMap,
+    redoGraphChange,
     reloadFromRemote,
     retryLoad,
     retrySave,
@@ -1250,6 +1826,14 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     selectedNode,
     syncError,
     syncStatus,
+    undoGraphChange,
+    updateSelectedEdgeDetails,
+    updateNodeTitle,
+    updateSelectedEdgeLabel,
+    updateSelectedNodeAppearance,
+    updateSelectedNodeCollapsed,
+    updateSelectedNodeDescription,
+    updateSelectedNodeMedia,
     updateSelectedNodeTitle,
   }
 }

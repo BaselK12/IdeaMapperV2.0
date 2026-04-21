@@ -3,8 +3,10 @@ import {
   AlertCircle,
   FileSearch,
   FolderKanban,
+  LogOut,
   Plus,
   Search,
+  Trash2,
   Users,
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
@@ -18,16 +20,27 @@ import {
   type CreateMapFormValues,
 } from "@/features/maps/components/create-map-modal"
 import {
+  MapDetailsModal,
+  type MapDetailsFormValues,
+} from "@/features/maps/components/map-details-modal"
+import {
   JoinMapModal,
   type JoinMapFormValues,
 } from "@/features/maps/components/join-map-modal"
+import { ModalFrame } from "@/features/maps/components/modal-frame"
 import { MapsList } from "@/features/maps/components/maps-list"
 import {
   useAccessibleMapsQuery,
   useCreateMapMutation,
+  useDeleteMapMutation,
   useJoinMapMutation,
+  useLeaveMapMutation,
+  useUpdateMapDetailsMutation,
 } from "@/features/maps/hooks/use-maps"
-import { JoinMapFlowError } from "@/features/maps/types/maps-types"
+import {
+  type AccessibleMap,
+  JoinMapFlowError,
+} from "@/features/maps/types/maps-types"
 
 function LoadingRows() {
   return (
@@ -53,6 +66,20 @@ function LoadingRows() {
   )
 }
 
+function isObviousTestMap(map: AccessibleMap) {
+  const name = map.name.trim().toLowerCase()
+  const description = map.description.trim().toLowerCase()
+
+  return (
+    name === "e2e viewer test map" ||
+    name === "e2e persistence test map" ||
+    name.startsWith("e2e persist") ||
+    description.includes("e2e viewer") ||
+    description.includes("e2e persistence") ||
+    description.includes("e2e test")
+  )
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -64,17 +91,29 @@ export function DashboardPage() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [joinInfoMessage, setJoinInfoMessage] = useState<string | null>(null)
+  const [selectedMapForDetails, setSelectedMapForDetails] =
+    useState<AccessibleMap | null>(null)
+  const [selectedMapForRemoval, setSelectedMapForRemoval] =
+    useState<AccessibleMap | null>(null)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
+  const [removalError, setRemovalError] = useState<string | null>(null)
 
   const mapsQuery = useAccessibleMapsQuery(userId)
   const createMapMutation = useCreateMapMutation(userId)
   const joinMapMutation = useJoinMapMutation(userId)
+  const updateMapDetailsMutation = useUpdateMapDetailsMutation(userId)
+  const deleteMapMutation = useDeleteMapMutation(userId)
+  const leaveMapMutation = useLeaveMapMutation(userId)
 
   const maps = mapsQuery.data
-  const accessibleMaps = maps ?? []
+  const accessibleMaps = useMemo(
+    () => (maps ?? []).filter((map) => !isObviousTestMap(map)),
+    [maps]
+  )
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
   const filteredMaps = useMemo(() => {
-    const sourceMaps = maps ?? []
+    const sourceMaps = accessibleMaps
 
     if (!normalizedSearchTerm) {
       return sourceMaps
@@ -83,7 +122,7 @@ export function DashboardPage() {
     return sourceMaps.filter((map) =>
       map.name.toLowerCase().includes(normalizedSearchTerm)
     )
-  }, [maps, normalizedSearchTerm])
+  }, [accessibleMaps, normalizedSearchTerm])
 
   const hasNoMaps =
     !mapsQuery.isLoading &&
@@ -125,6 +164,24 @@ export function DashboardPage() {
     setIsJoinModalOpen(false)
   }
 
+  const closeDetailsModal = () => {
+    if (updateMapDetailsMutation.isPending) {
+      return
+    }
+
+    setDetailsError(null)
+    setSelectedMapForDetails(null)
+  }
+
+  const closeRemovalModal = () => {
+    if (deleteMapMutation.isPending || leaveMapMutation.isPending) {
+      return
+    }
+
+    setRemovalError(null)
+    setSelectedMapForRemoval(null)
+  }
+
   const handleOpenMap = (mapId: string) => {
     navigate(`/app/map/${mapId}`)
   }
@@ -143,6 +200,49 @@ export function DashboardPage() {
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Failed to create map."
+      )
+    }
+  }
+
+  const handleUpdateMapDetails = async (values: MapDetailsFormValues) => {
+    if (!selectedMapForDetails) {
+      return
+    }
+
+    setDetailsError(null)
+
+    try {
+      await updateMapDetailsMutation.mutateAsync({
+        description: values.description,
+        mapId: selectedMapForDetails.id,
+        name: values.name,
+      })
+      setSelectedMapForDetails(null)
+    } catch (error) {
+      setDetailsError(
+        error instanceof Error ? error.message : "Failed to update map."
+      )
+    }
+  }
+
+  const handleRemoveMap = async () => {
+    if (!selectedMapForRemoval) {
+      return
+    }
+
+    setRemovalError(null)
+
+    try {
+      if (selectedMapForRemoval.ownerId === userId) {
+        await deleteMapMutation.mutateAsync(selectedMapForRemoval.id)
+      } else {
+        await leaveMapMutation.mutateAsync(selectedMapForRemoval.id)
+      }
+
+      setSelectedMapForRemoval(null)
+    } catch (error) {
+      setRemovalError(
+        error instanceof Error ? error.message : "Failed to update map access."
       )
     }
   }
@@ -203,7 +303,7 @@ export function DashboardPage() {
               </h1>
               <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
                 Create a map, reopen a workspace, or join one shared with your
-                team.
+                group.
               </p>
             </div>
 
@@ -216,11 +316,11 @@ export function DashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={openJoinModal} variant="outline">
               <Users className="size-4" />
-              Join Map
+              Join map
             </Button>
             <Button data-testid="create-map-btn" onClick={openCreateModal}>
               <Plus className="size-4" />
-              New Map
+              New map
             </Button>
           </div>
         </div>
@@ -283,17 +383,17 @@ export function DashboardPage() {
                 No maps yet
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                Start your first map or join one shared by your team to begin
-                collaborating.
+                Start your first map or join one shared by your group to begin
+                building.
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <Button onClick={openCreateModal} size="sm">
                   <Plus className="size-4" />
-                  New Map
+                  New map
                 </Button>
                 <Button onClick={openJoinModal} size="sm" variant="outline">
                   <Users className="size-4" />
-                  Join Map
+                  Join map
                 </Button>
               </div>
             </div>
@@ -312,7 +412,7 @@ export function DashboardPage() {
               </p>
               <div className="mt-5">
                 <Button onClick={clearSearch} size="sm" variant="outline">
-                  Clear Search
+                  Clear search
                 </Button>
               </div>
             </div>
@@ -322,7 +422,19 @@ export function DashboardPage() {
           !mapsQuery.isError &&
           !hasNoMaps &&
           !hasNoSearchResults ? (
-            <MapsList maps={filteredMaps} onOpenMap={handleOpenMap} />
+            <MapsList
+              currentUserId={userId}
+              maps={filteredMaps}
+              onEditMap={(map) => {
+                setDetailsError(null)
+                setSelectedMapForDetails(map)
+              }}
+              onOpenMap={handleOpenMap}
+              onRemoveMap={(map) => {
+                setRemovalError(null)
+                setSelectedMapForRemoval(map)
+              }}
+            />
           ) : null}
         </CardContent>
       </Card>
@@ -344,6 +456,71 @@ export function DashboardPage() {
         onSubmit={handleJoinMap}
         open={isJoinModalOpen}
       />
+      {selectedMapForDetails ? (
+        <MapDetailsModal
+          description="Update the name and description people see across the workspace."
+          errorMessage={detailsError}
+          initialDescription={selectedMapForDetails.description}
+          initialName={selectedMapForDetails.name}
+          isSubmitting={updateMapDetailsMutation.isPending}
+          onClose={closeDetailsModal}
+          onSubmit={handleUpdateMapDetails}
+          open
+          title="Edit map details"
+        />
+      ) : null}
+      <ModalFrame
+        description={
+          selectedMapForRemoval?.ownerId === userId
+            ? "This removes the map for everyone."
+            : "This removes the shared map from your workspace."
+        }
+        onClose={closeRemovalModal}
+        open={Boolean(selectedMapForRemoval)}
+        title={selectedMapForRemoval?.ownerId === userId ? "Delete map" : "Leave map"}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border/80 bg-card/95 px-3 py-3">
+            <p className="text-sm font-medium text-foreground">
+              {selectedMapForRemoval?.name ?? "Selected map"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {selectedMapForRemoval?.ownerId === userId
+                ? "Deleting a map also removes its nodes, connections, and shared access."
+                : "You can rejoin later if someone shares the invite details again."}
+            </p>
+          </div>
+
+          {removalError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {removalError}
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-2">
+            <Button onClick={closeRemovalModal} type="button" variant="ghost">
+              Cancel
+            </Button>
+            <Button
+              disabled={deleteMapMutation.isPending || leaveMapMutation.isPending}
+              onClick={handleRemoveMap}
+              type="button"
+              variant={selectedMapForRemoval?.ownerId === userId ? "destructive" : "outline"}
+            >
+              {selectedMapForRemoval?.ownerId === userId ? (
+                <Trash2 className="size-4" />
+              ) : (
+                <LogOut className="size-4" />
+              )}
+              {deleteMapMutation.isPending || leaveMapMutation.isPending
+                ? "Working..."
+                : selectedMapForRemoval?.ownerId === userId
+                  ? "Delete map"
+                  : "Leave map"}
+            </Button>
+          </div>
+        </div>
+      </ModalFrame>
     </section>
   )
 }

@@ -14,6 +14,19 @@ export type CreateMapPayload = {
   name: string
 }
 
+export type UpdateMapDetailsPayload = {
+  description?: string
+  mapId: string
+  name: string
+}
+
+export type UpdatedMapDetails = {
+  description: string
+  id: string
+  lastEdited: string | null
+  name: string
+}
+
 export type JoinMapPayload = {
   mapId: string
   mapName: string

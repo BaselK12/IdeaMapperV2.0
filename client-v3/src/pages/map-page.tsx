@@ -33,7 +33,7 @@ export function MapPage() {
       <MapWorkspaceState
         detail={
           normalizedMapId
-            ? `Map ID "${normalizedMapId}" is not a valid UUID.`
+            ? "This map link does not look valid."
             : "This route is missing a map ID."
         }
         variant="not-found"

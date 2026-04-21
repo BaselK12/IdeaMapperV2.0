@@ -27,6 +27,24 @@ const sidebarNav = [
   },
 ]
 
+function normalizeOptionalText(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function getAccountName(user: ReturnType<typeof useAuth>["user"]) {
+  if (!user) {
+    return "User"
+  }
+
+  const metadata = user.user_metadata
+  const metadataName =
+    normalizeOptionalText(metadata?.full_name) ||
+    normalizeOptionalText(metadata?.name) ||
+    normalizeOptionalText(metadata?.username)
+
+  return metadataName || user.email?.split("@")[0] || "User"
+}
+
 export function AppShell() {
   const navigate = useNavigate()
   const isDashboardRoute = Boolean(useMatch({ end: true, path: "/app" }))
@@ -34,9 +52,9 @@ export function AppShell() {
   const { signOut, user } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
-  const accountName = user?.email?.split("@")[0] ?? "User"
+  const accountName = getAccountName(user)
   const accountEmail = user?.email ?? "Signed in"
-  const accountInitial = (user?.email?.[0] ?? "U").toUpperCase()
+  const accountInitial = (accountName[0] ?? "U").toUpperCase()
 
   const handleSignOut = async () => {
     setSignOutError(null)
