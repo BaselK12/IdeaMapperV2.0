@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -28,14 +28,6 @@ export function CreateMapModal({
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open) {
-      setName("")
-      setDescription("")
-      setValidationMessage(null)
-    }
-  }, [open])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

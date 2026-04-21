@@ -158,7 +158,7 @@ function syncStatusPill(status: MapEditorSyncStatus): StatusPill {
   if (status === "connecting") {
     return {
       className: infoStatusClassName,
-      label: "Realtime reconnecting",
+      label: "Realtime connecting",
     }
   }
 
@@ -179,7 +179,7 @@ function liveCursorStatusPill(status: MapWorkspaceRealtimeStatus): StatusPill | 
   if (status === "connecting") {
     return {
       className: infoStatusClassName,
-      label: "Cursors reconnecting",
+      label: "Cursors connecting",
     }
   }
 

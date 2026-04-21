@@ -330,6 +330,7 @@ export function DashboardPage() {
       <CreateMapModal
         errorMessage={createError}
         isSubmitting={createMapMutation.isPending}
+        key={isCreateModalOpen ? "create-open" : "create-closed"}
         onClose={closeCreateModal}
         onSubmit={handleCreateMap}
         open={isCreateModalOpen}
@@ -338,6 +339,7 @@ export function DashboardPage() {
         errorMessage={joinError}
         infoMessage={joinInfoMessage}
         isSubmitting={joinMapMutation.isPending}
+        key={isJoinModalOpen ? "join-open" : "join-closed"}
         onClose={closeJoinModal}
         onSubmit={handleJoinMap}
         open={isJoinModalOpen}

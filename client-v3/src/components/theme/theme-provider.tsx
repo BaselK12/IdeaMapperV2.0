@@ -42,7 +42,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   )
 
   useEffect(() => {
-    setSystemTheme(getSystemTheme())
     return subscribeToSystemTheme(setSystemTheme)
   }, [])
 

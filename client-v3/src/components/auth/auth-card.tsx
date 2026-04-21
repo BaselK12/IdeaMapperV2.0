@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { ArrowLeft } from "lucide-react"
+import { useState } from "react"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -52,22 +52,17 @@ export function AuthCard({
   const [view, setView] = useState<InternalView>(defaultTab)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Sync with defaultTab prop changes (e.g. when the modal opens on a specific tab)
-  useEffect(() => {
-    setView(defaultTab)
+  const changeView = (nextView: InternalView) => {
+    setView(nextView)
     setErrorMessage(null)
     setSuccessMessage(null)
-  }, [defaultTab])
-
-  // Clear messages on any view transition
-  useEffect(() => {
-    setErrorMessage(null)
-    setSuccessMessage(null)
-  }, [view])
+    setIsPasswordVisible(false)
+  }
 
   const isForgotPassword = view === "forgot-password"
   // The tab strip always reflects login/signup — forgot-password sits under login
@@ -157,7 +152,7 @@ export function AuthCard({
           // Forgot-password: replace tab strip with a back link
           <button
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => setView("login")}
+            onClick={() => changeView("login")}
             type="button"
           >
             <ArrowLeft className="size-3.5" />
@@ -172,7 +167,7 @@ export function AuthCard({
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
               )}
-              onClick={() => setView("login")}
+              onClick={() => changeView("login")}
               type="button"
             >
               Log in
@@ -184,7 +179,7 @@ export function AuthCard({
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
               )}
-              onClick={() => setView("signup")}
+              onClick={() => changeView("signup")}
               type="button"
             >
               Sign up
@@ -233,29 +228,47 @@ export function AuthCard({
                 {view === "login" && (
                   <button
                     className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    onClick={() => setView("forgot-password")}
+                    onClick={() => changeView("forgot-password")}
                     type="button"
                   >
                     Forgot password?
                   </button>
                 )}
               </div>
-              <Input
-                autoComplete={
-                  view === "login" ? "current-password" : "new-password"
-                }
-                disabled={isFormDisabled}
-                id="auth-password"
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={
-                  view === "signup"
-                    ? `At least ${MIN_PASSWORD_LENGTH} characters`
-                    : "Enter your password"
-                }
-                required
-                type="password"
-                value={password}
-              />
+              <div className="relative">
+                <Input
+                  autoComplete={
+                    view === "login" ? "current-password" : "new-password"
+                  }
+                  className="pr-10"
+                  disabled={isFormDisabled}
+                  id="auth-password"
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={
+                    view === "signup"
+                      ? `At least ${MIN_PASSWORD_LENGTH} characters`
+                      : "Enter your password"
+                  }
+                  required
+                  type={isPasswordVisible ? "text" : "password"}
+                  value={password}
+                />
+                <button
+                  aria-label={
+                    isPasswordVisible ? "Hide password" : "Show password"
+                  }
+                  className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isFormDisabled}
+                  onClick={() => setIsPasswordVisible((current) => !current)}
+                  type="button"
+                >
+                  {isPasswordVisible ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

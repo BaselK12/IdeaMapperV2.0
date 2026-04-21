@@ -367,8 +367,8 @@ export function useMapWorkspaceLiveCursors({
             return currentNodeDrags
           }
 
-          const { [nodeId]: _removedNodeDrag, ...nextNodeDrags } =
-            currentNodeDrags
+          const nextNodeDrags = { ...currentNodeDrags }
+          delete nextNodeDrags[nodeId]
           return nextNodeDrags
         })
         return
@@ -549,8 +549,8 @@ export function useMapWorkspaceLiveCursors({
           return currentNodeDrags
         }
 
-        const { [normalizedNodeId]: _removedNodeDrag, ...nextNodeDrags } =
-          currentNodeDrags
+        const nextNodeDrags = { ...currentNodeDrags }
+        delete nextNodeDrags[normalizedNodeId]
         return nextNodeDrags
       })
 

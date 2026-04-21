@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes } from "react-router-dom"
 
 import { ErrorBoundary } from "@/components/error-boundary"
 import { ProtectedRoute } from "@/components/routing/protected-route"
@@ -17,10 +17,12 @@ function App() {
   return (
     <Routes>
       <Route element={<LandingPage />} path="/" />
+      <Route element={<Navigate replace to="/auth" />} path="/login" />
       <Route element={<AuthPage />} path="/auth" />
       <Route element={<ResetPasswordPage />} path="/auth/reset-password" />
       <Route element={<PrivacyPage />} path="/privacy" />
       <Route element={<TermsPage />} path="/terms" />
+      <Route element={<Navigate replace to="/app" />} path="/dashboard" />
       <Route element={<ProtectedRoute />} path="/app">
         <Route
           element={

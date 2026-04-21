@@ -1,4 +1,3 @@
-import { useState } from "react"
 import {
   ArrowRight,
   CheckCircle2,
@@ -9,14 +8,12 @@ import {
   Users2,
   type LucideIcon,
 } from "lucide-react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 
-import dashboardDarkScreenshot from "@/assets/landing/landing-dashboard-dark.png"
-import dashboardLightScreenshot from "@/assets/landing/landing-dashboard-light.png"
-import workspaceDarkScreenshot from "@/assets/landing/landing-workspace-dark.png"
-import workspaceLightScreenshot from "@/assets/landing/landing-workspace-light.png"
-import { AuthModal } from "@/components/auth/auth-modal"
-import { type AuthTab } from "@/components/auth/auth-card"
+import {
+  LandingDashboardPreview,
+  LandingWorkspacePreview,
+} from "@/components/landing/landing-product-previews"
 import { PublicFooter } from "@/components/layout/public-footer"
 import { SupabaseWarning } from "@/components/supabase/supabase-warning"
 import { useTheme } from "@/components/theme/theme-provider"
@@ -84,20 +81,8 @@ const workflowSteps = [
 ]
 
 export function LandingPage() {
-  const navigate = useNavigate()
   const { resolvedTheme } = useTheme()
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const [authDefaultTab, setAuthDefaultTab] = useState<AuthTab>("signup")
   const isDark = resolvedTheme === "dark"
-  const heroScreenshot =
-    resolvedTheme === "dark" ? workspaceDarkScreenshot : workspaceLightScreenshot
-  const workflowScreenshot =
-    resolvedTheme === "dark" ? dashboardDarkScreenshot : dashboardLightScreenshot
-
-  const openAuthModal = (tab: AuthTab) => {
-    setAuthDefaultTab(tab)
-    setIsAuthModalOpen(true)
-  }
 
   const scrollToDemo = () => {
     document
@@ -120,10 +105,12 @@ export function LandingPage() {
             Branchly
           </Link>
           <div className="flex items-center gap-2">
-            <Button onClick={() => openAuthModal("login")} variant="ghost">
-              Log in
+            <Button asChild variant="ghost">
+              <Link to="/auth?tab=login">Log in</Link>
             </Button>
-            <Button onClick={() => openAuthModal("signup")}>Get started</Button>
+            <Button asChild>
+              <Link to="/auth?tab=signup">Get started</Link>
+            </Button>
           </div>
         </div>
       </header>
@@ -145,12 +132,14 @@ export function LandingPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
+                asChild
                 className="gap-2"
-                onClick={() => openAuthModal("signup")}
                 size="lg"
               >
-                Get started
-                <ArrowRight className="size-4" />
+                <Link to="/auth?tab=signup">
+                  Get started
+                  <ArrowRight className="size-4" />
+                </Link>
               </Button>
               <Button
                 className="gap-2"
@@ -235,18 +224,14 @@ export function LandingPage() {
                     isDark ? "border-white/8 bg-[#100d1a]" : "border-border/70 bg-background"
                   )}
                 >
-                  <img
-                    alt="Branchly workspace showing canvas, navigator, participants, and inspector."
-                    className="block h-auto w-full"
-                    src={heroScreenshot}
-                  />
+                  <LandingWorkspacePreview />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-3">
                   <p className="text-sm font-medium text-foreground">
                     A calm editor built for shared visual thinking.
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Real product capture from the live workspace
+                    Clean demo content from the product workflow
                   </p>
                 </div>
               </div>
@@ -313,11 +298,13 @@ export function LandingPage() {
                 Create your first shared map and move straight into the workspace.
               </p>
               <Button
+                asChild
                 className="mt-3 w-full gap-2 lg:w-auto"
-                onClick={() => openAuthModal("signup")}
               >
-                Create your first shared map
-                <ArrowRight className="size-4" />
+                <Link to="/auth?tab=signup">
+                  Create your first shared map
+                  <ArrowRight className="size-4" />
+                </Link>
               </Button>
             </div>
           </div>
@@ -349,7 +336,7 @@ export function LandingPage() {
                   </div>
                 </div>
                 <span className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground">
-                  Real product view
+                  Clean demo view
                 </span>
               </div>
               <div
@@ -358,11 +345,7 @@ export function LandingPage() {
                   isDark ? "border-white/8 bg-[#100d1a]" : "border-border/70 bg-card"
                 )}
               >
-                <img
-                  alt="Branchly dashboard showing the map library and primary actions."
-                  className="block h-auto w-full"
-                  src={workflowScreenshot}
-                />
+                <LandingDashboardPreview />
               </div>
             </div>
 
@@ -393,13 +376,6 @@ export function LandingPage() {
       </main>
 
       <PublicFooter />
-
-      <AuthModal
-        defaultTab={authDefaultTab}
-        onAuthSuccess={() => navigate("/app")}
-        onOpenChange={setIsAuthModalOpen}
-        open={isAuthModalOpen}
-      />
     </div>
   )
 }

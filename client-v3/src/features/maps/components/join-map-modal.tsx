@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -30,14 +30,6 @@ export function JoinMapModal({
   const [mapName, setMapName] = useState("")
   const [mapId, setMapId] = useState("")
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open) {
-      setMapName("")
-      setMapId("")
-      setValidationMessage(null)
-    }
-  }, [open])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

@@ -26,4 +26,19 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: [
+      'src/components/theme/theme-provider.tsx',
+      'src/features/auth/auth-context.tsx',
+    ],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['src/features/map-workspace/hooks/use-map-workspace-live-cursors.ts'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ])

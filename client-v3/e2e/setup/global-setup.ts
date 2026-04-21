@@ -14,7 +14,6 @@
  *  - It uses the Supabase JS client directly (no browser needed), which is
  *    faster and more reliable than driving the UI for setup.
  */
-import type { FullConfig } from "@playwright/test"
 import { createClient } from "@supabase/supabase-js"
 import * as dotenv from "dotenv"
 import * as fs from "fs"
@@ -29,6 +28,17 @@ const STATE_FILE = path.resolve(__dirname, "../.test-state.json")
 const VIEWER_MAP_NAME = "E2E Viewer Test Map"
 const PERSIST_MAP_NAME = "E2E Persistence Test Map"
 
+type ParticipantMap = { id: string; name: string }
+type ParticipantRow = { map: ParticipantMap | ParticipantMap[] | null }
+
+function getParticipantMap(row: ParticipantRow) {
+  if (Array.isArray(row.map)) {
+    return row.map[0] ?? null
+  }
+
+  return row.map
+}
+
 function requireEnv(key: string): string {
   const value = process.env[key]
   if (!value) {
@@ -40,7 +50,7 @@ function requireEnv(key: string): string {
   return value
 }
 
-export default async function globalSetup(_config: FullConfig): Promise<void> {
+export default async function globalSetup(): Promise<void> {
   const supabaseUrl = requireEnv("VITE_SUPABASE_URL")
   const supabaseAnonKey = requireEnv("VITE_SUPABASE_ANON_KEY")
   const adminEmail = requireEnv("E2E_ADMIN_EMAIL")
@@ -80,16 +90,17 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   // graphQuery in a never-resolving state.  The graph is reset to empty here
   // so the test always starts from a known 0-node state.
   // Re-fetch participant rows AFTER cleanup so we see the post-delete state.
-  type ParticipantRow2 = { map: { id: string; name: string } | null }
   const { data: adminRows } = await supabase
     .from("map_participants")
     .select("map:maps(id,name)")
     .eq("user_id", adminAuth.user.id)
 
+  const adminParticipantRows = (adminRows ?? []) as unknown as ParticipantRow[]
   let persistTestMapId: string | null = null
-  for (const row of (adminRows ?? []) as ParticipantRow2[]) {
-    if (row.map?.name === PERSIST_MAP_NAME) {
-      persistTestMapId = row.map.id
+  for (const row of adminParticipantRows) {
+    const map = getParticipantMap(row)
+    if (map?.name === PERSIST_MAP_NAME) {
+      persistTestMapId = map.id
       break
     }
   }
@@ -122,12 +133,12 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   }
 
   // ── Step 2: Find or create the viewer test map ──────────────────────────
-  type ParticipantRow = { map: { id: string; name: string } | null }
   // Re-use the rows already fetched above
   let viewerTestMapId: string | null = null
-  for (const row of (adminRows ?? []) as ParticipantRow[]) {
-    if (row.map?.name === VIEWER_MAP_NAME) {
-      viewerTestMapId = row.map.id
+  for (const row of adminParticipantRows) {
+    const map = getParticipantMap(row)
+    if (map?.name === VIEWER_MAP_NAME) {
+      viewerTestMapId = map.id
       break
     }
   }

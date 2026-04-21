@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
 
@@ -25,11 +25,6 @@ export function ResetPasswordPage() {
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  // Store phase in a ref so the timeout callback reads the current value
-  // without causing a stale-closure bug.
-  const phaseRef = useRef<Phase>(phase)
-  phaseRef.current = phase
-
   useEffect(() => {
     if (!hasSupabaseEnv) return
 

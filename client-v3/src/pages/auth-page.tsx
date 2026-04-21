@@ -1,5 +1,11 @@
 import { ArrowLeft, Sparkles } from "lucide-react"
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom"
 
 import { AuthCard } from "@/components/auth/auth-card"
 import { PublicFooter } from "@/components/layout/public-footer"
@@ -14,9 +20,25 @@ type AuthLocationState = {
 export function AuthPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { isAuthenticated, isLoading } = useAuth()
   const from =
     (location.state as AuthLocationState | null)?.from?.trim() || "/app"
+  const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login"
+  const authIntro =
+    defaultTab === "signup"
+      ? {
+          badge: "New here?",
+          heading: "Start mapping ideas with your team.",
+          subtext:
+            "Create an account and get straight into a shared workspace your whole team can use.",
+        }
+      : {
+          badge: "Welcome back",
+          heading: "Log in to Branchly and keep building your maps.",
+          subtext:
+            "Open your dashboard, return to a shared map, and keep your team's ideas organized in one place.",
+        }
 
   if (isLoading) {
     return (
@@ -54,42 +76,41 @@ export function AuthPage() {
           <section className="hidden animate-fade-up lg:block">
             <div className="max-w-xl space-y-6">
               <span className="inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-foreground">
-                Secure access
+                {authIntro.badge}
               </span>
               <div className="space-y-3">
                 <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-                  Sign in and get back to your maps without losing context.
+                  {authIntro.heading}
                 </h1>
                 <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
-                  Use the same workspace flow to open your dashboard, return to a
-                  requested map, and continue collaborating with less visual
-                  friction.
+                  {authIntro.subtext}
                 </p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
-                    Direct sign-in
+                    Your dashboard
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Keep access simple with one clear entry point into the app.
+                    Find recent maps and start new ones from one tidy home.
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
-                    Return to flow
+                    Shared maps
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Go back to the dashboard or requested route after auth.
+                    Join a teammate's map and work from the same plan.
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-foreground">
-                    Shared workspace
+                    Fast return
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Pick up map work quickly once the session is ready.
+                    After signing in, Branchly brings you back to the page you
+                    opened.
                   </p>
                 </div>
               </div>
@@ -100,7 +121,8 @@ export function AuthPage() {
             <SupabaseWarning className="animate-fade-up" />
             <AuthCard
               className="animate-fade-up"
-              defaultTab="login"
+              defaultTab={defaultTab}
+              key={defaultTab}
               onAuthSuccess={() => navigate(from, { replace: true })}
             />
           </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { PublicFooter } from "@/components/layout/public-footer"
 
 const LAST_UPDATED = "April 2025"
-const CONTACT_EMAIL = "hello@ideamapper.app"
+const CONTACT_EMAIL = "hello@branchly.app"
 
 export function TermsPage() {
   return (

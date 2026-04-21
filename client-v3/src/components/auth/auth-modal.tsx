@@ -69,7 +69,11 @@ export function AuthModal({
         >
           <X className="size-4" />
         </Button>
-        <AuthCard defaultTab={defaultTab} onAuthSuccess={handleAuthSuccess} />
+        <AuthCard
+          defaultTab={defaultTab}
+          key={defaultTab}
+          onAuthSuccess={handleAuthSuccess}
+        />
       </div>
     </div>
   )

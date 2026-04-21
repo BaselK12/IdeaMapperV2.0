@@ -43,7 +43,7 @@ test("@smoke node added to a map persists across reload", async ({ page }) => {
     }
   })
   page.on("console", (msg) => {
-    if (msg.type() === "error" || msg.type() === "warn") {
+    if (msg.type() === "error" || msg.type() === "warning") {
       console.log(`[browser ${msg.type()}] ${msg.text()}`)
     }
   })
@@ -70,15 +70,15 @@ test("@smoke node added to a map persists across reload", async ({ page }) => {
   console.log(`[test] supabase requests so far:\n  ${supabaseRequests.join("\n  ")}`)
 
   // ── Wait for the canvas to be fully hydrated ──────────────────────────
-  // After graphQuery resolves with canEdit=true the editor transitions:
-  //   "idle" ("No local edits") → "saved" ("Saved")
-  // Waiting for "Saved" ensures isHydratedRef=true before clicking so that
-  // queuePersist proceeds normally and does not bail silently.
-  await expect(page.getByTestId("save-status-pill")).toHaveText("Saved", {
-    timeout: 20_000,
-  })
+  // An empty map (0 nodes) loads with saveStatus="idle" → "No local edits".
+  // A map with prior nodes transitions to "saved" → "Saved" after hydration.
+  // Either state means graphQuery has resolved and the editor is ready.
+  await expect(page.getByTestId("save-status-pill")).toHaveText(
+    /Saved|No local edits/,
+    { timeout: 20_000 }
+  )
 
-  console.log(`[test] pill reached "Saved"`)
+  console.log(`[test] pill reached hydrated state`)
   console.log(`[test] all supabase requests:\n  ${supabaseRequests.join("\n  ")}`)
 
   // ── Add the first node ─────────────────────────────────────────────────

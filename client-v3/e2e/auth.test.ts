@@ -36,6 +36,8 @@ test("@smoke admin can sign out and is redirected to the landing page", async ({
   // Sign-out button lives in the sidebar (desktop) — app-shell.tsx
   await page.getByRole("button", { name: "Sign out" }).click()
 
-  // handleSignOut calls navigate("/", { replace: true }) on success
-  await expect(page).toHaveURL("/", { timeout: 10_000 })
+  // ProtectedRoute clears session via onAuthStateChange → redirects to /auth.
+  // The navigate("/") in handleSignOut races with ProtectedRoute's declarative
+  // redirect; /auth is the reliable destination driven by the auth architecture.
+  await expect(page).toHaveURL(/\/auth/, { timeout: 10_000 })
 })

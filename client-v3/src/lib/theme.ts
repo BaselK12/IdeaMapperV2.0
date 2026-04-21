@@ -1,7 +1,8 @@
 export type ThemeMode = "light" | "dark" | "system"
 export type ResolvedTheme = Exclude<ThemeMode, "system">
 
-export const THEME_STORAGE_KEY = "ideamapper-theme"
+export const THEME_STORAGE_KEY = "branchly-theme"
+const LEGACY_THEME_STORAGE_KEY = "ideamapper-theme"
 export const SYSTEM_THEME_MEDIA_QUERY = "(prefers-color-scheme: dark)"
 
 export function isThemeMode(value: string | null | undefined): value is ThemeMode {
@@ -15,7 +16,12 @@ export function getStoredTheme(): ThemeMode | null {
 
   try {
     const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-    return isThemeMode(storedTheme) ? storedTheme : null
+    if (isThemeMode(storedTheme)) {
+      return storedTheme
+    }
+
+    const legacyTheme = window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY)
+    return isThemeMode(legacyTheme) ? legacyTheme : null
   } catch {
     return null
   }
@@ -73,6 +79,7 @@ export function persistTheme(themeMode: ThemeMode) {
 
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode)
+    window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY)
   } catch {
     // Ignore storage failures and keep the in-memory theme active.
   }
