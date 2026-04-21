@@ -76,10 +76,10 @@ npm run typecheck
 
 In the Supabase dashboard → **Authentication → URL Configuration**:
 
-- **Site URL**: set to your production domain (e.g. `https://ideamapper.example.com`)
+- **Site URL**: set to your production domain (e.g. `https://branchly.example.com`)
 - **Redirect URLs**: add both:
   - `http://localhost:5173/auth/reset-password` (development)
-  - `https://ideamapper.example.com/auth/reset-password` (production)
+  - `https://branchly.example.com/auth/reset-password` (production)
 
 Without the production redirect URL, password reset emails will fail.
 
