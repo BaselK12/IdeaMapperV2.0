@@ -308,8 +308,9 @@ export function DashboardPage() {
             </div>
 
             <div className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
-              {accessibleMaps.length}{" "}
-              {accessibleMaps.length === 1 ? "map" : "maps"} in your workspace
+              {normalizedSearchTerm
+                ? `${filteredMaps.length} of ${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"}`
+                : `${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"} in your workspace`}
             </div>
           </div>
 
@@ -331,8 +332,9 @@ export function DashboardPage() {
           <div className="flex flex-col gap-1">
             <CardTitle className="text-base md:text-lg">All maps</CardTitle>
             <p className="text-sm text-muted-foreground">
-              {accessibleMaps.length}{" "}
-              {accessibleMaps.length === 1 ? "map" : "maps"} in your workspace
+              {normalizedSearchTerm
+                ? `${filteredMaps.length} of ${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"}`
+                : `${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"} in your workspace`}
             </p>
           </div>
 

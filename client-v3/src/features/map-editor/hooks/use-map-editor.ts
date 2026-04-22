@@ -1759,12 +1759,12 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
           ? firstNode.position.x - secondNode.position.x
           : firstNode.position.y - secondNode.position.y
       )
-      const verticalOffset = Math.max(0, (sortedLevelNodes.length - 1) * 76)
+      const verticalOffset = Math.max(0, (sortedLevelNodes.length - 1) * 95)
 
       sortedLevelNodes.forEach((node, index) => {
         positionByNode.set(node.id, {
-          x: 120 + level * 290,
-          y: 140 + index * 152 - verticalOffset,
+          x: 120 + level * 340,
+          y: 140 + index * 190 - verticalOffset,
         })
       })
     }

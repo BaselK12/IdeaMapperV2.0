@@ -774,28 +774,37 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
       )}
       ref={workspaceRef}
     >
-      <header className="sticky top-0 z-30 space-y-3 border-b border-border/70 bg-card/95 px-4 py-3.5 backdrop-blur md:px-5 md:py-4">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild size="sm" variant="ghost">
-              <Link to="/app">
-                <ArrowLeft className="size-4" />
-                Dashboard
-              </Link>
-            </Button>
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                roleClassName(map.role)
-              )}
-            >
-              {formatRole(map.role)}
-            </span>
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-card/95 px-4 py-2 backdrop-blur md:px-5">
+        <div className="flex items-center gap-2">
+          <Button asChild className="shrink-0" size="sm" variant="ghost">
+            <Link to="/app">
+              <ArrowLeft className="size-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          </Button>
+          <span
+            className={cn(
+              "hidden shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium sm:inline-flex",
+              roleClassName(map.role)
+            )}
+          >
+            {formatRole(map.role)}
+          </span>
+
+          <div className="min-w-0 flex-1 px-1">
+            <h1 className="truncate text-sm font-semibold text-foreground md:text-base">
+              {map.name}
+            </h1>
+            {map.description ? (
+              <p className="truncate text-[11px] text-muted-foreground">
+                {map.description}
+              </p>
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <Button
-              className="h-8 px-3 text-xs"
+              className="h-7 px-2 text-[11px]"
               onClick={() => {
                 setShareFeedback(null)
                 setActiveDialog("share")
@@ -804,11 +813,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               type="button"
               variant="outline"
             >
-              <Share2 className="size-4" />
-              Share
+              <Share2 className="size-3.5" />
+              <span className="hidden sm:inline">Share</span>
             </Button>
             <Button
-              className="h-8 px-3 text-xs"
+              className="h-7 px-2 text-[11px]"
               onClick={() => {
                 setExportFeedback(null)
                 setActiveDialog("export")
@@ -817,21 +826,21 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               type="button"
               variant="outline"
             >
-              <Download className="size-4" />
-              Export
+              <Download className="size-3.5" />
+              <span className="hidden sm:inline">Export</span>
             </Button>
             <Button
-              className="h-8 px-3 text-xs"
+              className="h-7 px-2 text-[11px]"
               onClick={() => setActiveDialog("more")}
               size="sm"
               type="button"
               variant="outline"
             >
-              <MoreHorizontal className="size-4" />
-              More
+              <MoreHorizontal className="size-3.5" />
+              <span className="hidden sm:inline">More</span>
             </Button>
             <Button
-              className="h-8 px-3 text-xs"
+              className="h-7 px-2 text-[11px]"
               onClick={() => {
                 void toggleFullscreen()
               }}
@@ -840,45 +849,39 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               variant="outline"
             >
               {isFullscreen ? (
-                <Minimize2 className="size-4" />
+                <Minimize2 className="size-3.5" />
               ) : (
-                <Maximize2 className="size-4" />
+                <Maximize2 className="size-3.5" />
               )}
-              {isFullscreen ? "Exit" : "Fullscreen"}
+              <span className="hidden md:inline">
+                {isFullscreen ? "Exit" : "Fullscreen"}
+              </span>
             </Button>
             <Button
-              className="h-8 px-3 text-xs"
+              className="h-7 px-2 text-[11px]"
               onClick={toggleFocusMode}
               size="sm"
               type="button"
               variant={isFocusMode ? "secondary" : "outline"}
             >
-              <Presentation className="size-4" />
-              {isFocusMode ? "Exit present" : "Present"}
+              <Presentation className="size-3.5" />
+              <span className="hidden md:inline">
+                {isFocusMode ? "Exit present" : "Present"}
+              </span>
             </Button>
           </div>
         </div>
 
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[2rem]">
-            {map.name}
-          </h1>
-          <p className="line-clamp-2 max-w-3xl text-sm text-muted-foreground md:text-[15px]">
-            {map.description ||
-              (canEditMapDetails
-                ? "Add a description from More > Edit details."
-                : "No description has been added yet.")}
-          </p>
-        </div>
-
         {isFocusMode ? null : (
-          <MapWorkspaceParticipantStrip
-            errorMessage={mapPresence.errorMessage}
-            isLoading={mapPresence.isLoading}
-            isPresenceUnavailable={mapPresence.isPresenceUnavailable}
-            onRetry={mapPresence.retry}
-            participants={mapPresence.participants}
-          />
+          <div className="mt-1.5">
+            <MapWorkspaceParticipantStrip
+              errorMessage={mapPresence.errorMessage}
+              isLoading={mapPresence.isLoading}
+              isPresenceUnavailable={mapPresence.isPresenceUnavailable}
+              onRetry={mapPresence.retry}
+              participants={mapPresence.participants}
+            />
+          </div>
         )}
       </header>
 
@@ -892,15 +895,17 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
       >
         <aside
           className={cn(
-            "order-2 rounded-2xl border border-border/70 bg-card/90 p-4 xl:order-none xl:min-h-0",
+            "order-2 flex flex-col rounded-2xl border border-border/70 bg-card/90 xl:order-none xl:min-h-0",
             isFocusMode && "hidden"
           )}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            Navigator
-          </p>
-
-          <div className="relative mt-3">
+          <div className="shrink-0 border-b border-border/60 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Navigator
+            </p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+          <div className="relative mt-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="h-9 pl-9"
@@ -983,6 +988,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                 </p>
               </div>
             </div>
+          </div>
           </div>
         </aside>
 
@@ -1161,13 +1167,16 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
         <aside
           className={cn(
-            "order-3 rounded-2xl border border-border/70 bg-card/90 p-4 xl:order-none xl:min-h-0",
+            "order-3 flex flex-col rounded-2xl border border-border/70 bg-card/90 xl:order-none xl:min-h-0",
             isFocusMode && "hidden"
           )}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            Inspector
-          </p>
+          <div className="shrink-0 border-b border-border/60 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Inspector
+            </p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
 
           {editor.selectedNode ? (
             <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/95 p-3.5">
@@ -1189,6 +1198,33 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   </p>
                 ) : null}
               </div>
+              {editor.selectedNode.outgoingEdgeCount > 0 ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/80 px-2.5 py-1.5">
+                  <span className="text-xs text-muted-foreground">
+                    Branch ({editor.selectedNode.outgoingEdgeCount} outgoing)
+                  </span>
+                  <Button
+                    className="h-7 px-2.5 text-[11px]"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      editor.updateSelectedNodeCollapsed(
+                        !editor.selectedNode?.collapsed
+                      )
+                      publishToast(
+                        editor.selectedNode?.collapsed
+                          ? "Branch expanded."
+                          : "Branch collapsed.",
+                        "info"
+                      )
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {editor.selectedNode.collapsed ? "Expand" : "Collapse"}
+                  </Button>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label
@@ -1328,37 +1364,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                 </div>
               </div>
               <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2 text-xs">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-muted-foreground">Connections</p>
-                    <p className="font-medium text-foreground">
-                      {editor.selectedNode.incomingEdgeCount} incoming,{" "}
-                      {editor.selectedNode.outgoingEdgeCount} outgoing
-                    </p>
-                  </div>
-                  {editor.selectedNode.outgoingEdgeCount > 0 ? (
-                    <Button
-                      className="h-7 px-2 text-[11px]"
-                      disabled={isReadOnly}
-                      onClick={() => {
-                        editor.updateSelectedNodeCollapsed(
-                          !editor.selectedNode?.collapsed
-                        )
-                        publishToast(
-                          editor.selectedNode?.collapsed
-                            ? "Branch expanded."
-                            : "Branch collapsed.",
-                          "info"
-                        )
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {editor.selectedNode.collapsed ? "Expand" : "Collapse"}
-                    </Button>
-                  ) : null}
-                </div>
+                <p className="text-muted-foreground">Connections</p>
+                <p className="font-medium text-foreground">
+                  {editor.selectedNode.incomingEdgeCount} incoming,{" "}
+                  {editor.selectedNode.outgoingEdgeCount} outgoing
+                </p>
               </div>
             </div>
           ) : editor.selectedEdge ? (
@@ -1483,6 +1493,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   ? "Add a description from More > Edit details."
                   : "No description has been added yet.")}
             </p>
+          </div>
           </div>
         </aside>
       </div>

@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react"
 import {
+  HelpCircle,
   LocateFixed,
   Network,
   Plus,
@@ -15,14 +16,19 @@ import {
   RotateCcw,
   Sparkles,
   Undo2,
+  X,
 } from "lucide-react"
 import ReactFlow, {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   MarkerType,
   MiniMap,
+  getSmoothStepPath,
   type Connection,
   type EdgeChange,
+  type EdgeProps,
   type NodeChange,
   type OnSelectionChangeParams,
   type ReactFlowInstance,
@@ -35,8 +41,75 @@ import { Button } from "@/components/ui/button"
 import { MapEditorNode } from "@/features/map-editor/components/map-editor-node"
 import type { MapEditorEdge, MapEditorNode as MapEditorFlowNode } from "@/features/map-editor/types/map-editor-types"
 
+function MapEditorEdgeComponent({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  label,
+  selected,
+  markerEnd,
+  style,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourcePosition,
+    sourceX,
+    sourceY,
+    targetPosition,
+    targetX,
+    targetY,
+  })
+
+  const note = typeof data?.note === "string" ? data.note.trim() : ""
+  const link = typeof data?.link === "string" ? data.link.trim() : ""
+  const displayLabel =
+    typeof label === "string" && label.trim()
+      ? label.trim()
+      : note || link
+        ? "Details"
+        : null
+
+  return (
+    <>
+      <BaseEdge id={id} markerEnd={markerEnd} path={edgePath} style={style} />
+      {displayLabel ? (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan"
+            style={{
+              left: labelX,
+              pointerEvents: "all",
+              position: "absolute",
+              top: labelY,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <span
+              className={
+                selected
+                  ? "inline-flex items-center rounded-md border border-primary/40 bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary shadow-sm"
+                  : "inline-flex items-center rounded-md border border-border/80 bg-card px-2 py-0.5 text-[11px] font-semibold text-foreground shadow-sm"
+              }
+            >
+              {displayLabel}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  )
+}
+
 const nodeTypes = {
   mapNode: MapEditorNode,
+}
+
+const edgeTypes = {
+  mapEdge: MapEditorEdgeComponent,
 }
 
 const reactFlowChromeStyles = `
@@ -236,6 +309,7 @@ export function MapEditorCanvas({
   const [inlineEditingNodeId, setInlineEditingNodeId] = useState<string | null>(
     null
   )
+  const [showHelp, setShowHelp] = useState(false)
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowRef.current = instance
@@ -468,6 +542,12 @@ export function MapEditorCanvas({
       if (event.key === "0") {
         event.preventDefault()
         handleResetView()
+        return
+      }
+
+      if (event.key === "?" || (event.shiftKey && event.key === "/")) {
+        event.preventDefault()
+        setShowHelp((prev) => !prev)
       }
     }
 
@@ -492,20 +572,6 @@ export function MapEditorCanvas({
       edges.map((edge) => ({
         ...edge,
         animated: Boolean(edge.selected),
-        label:
-          edge.label ||
-          (edge.data?.note || edge.data?.link ? "Details" : edge.label),
-        labelBgBorderRadius: 8,
-        labelBgPadding: [8, 4] as [number, number],
-        labelBgStyle: {
-          fill: "hsl(var(--card) / 0.96)",
-          stroke: "hsl(var(--border) / 0.9)",
-        },
-        labelStyle: {
-          fill: "hsl(var(--foreground))",
-          fontSize: 12,
-          fontWeight: 600,
-        },
         style: {
           ...edge.style,
           stroke: edge.selected
@@ -712,7 +778,64 @@ export function MapEditorCanvas({
         >
           <RotateCcw className="size-4" />
         </Button>
+        <Button
+          aria-label="Keyboard shortcuts"
+          onClick={() => setShowHelp((prev) => !prev)}
+          size="sm"
+          title="Keyboard shortcuts"
+          type="button"
+          variant="outline"
+        >
+          <HelpCircle className="size-4" />
+        </Button>
       </div>
+
+      {showHelp ? (
+        <div className="absolute right-3 top-3 z-30 w-72 rounded-2xl border border-border/80 bg-card/97 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
+              Keyboard shortcuts
+            </p>
+            <button
+              aria-label="Close shortcuts panel"
+              className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              onClick={() => setShowHelp(false)}
+              type="button"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <div className="p-4">
+            <table className="w-full text-[11px]">
+              <tbody className="divide-y divide-border/50">
+                {[
+                  { key: "N", label: "Add node" },
+                  { key: "Del / Backspace", label: "Delete selection" },
+                  { key: "Ctrl Z", label: "Undo" },
+                  { key: "Ctrl Shift Z", label: "Redo" },
+                  { key: "O", label: "Organize layout" },
+                  { key: "F", label: "Fit map to screen" },
+                  { key: "0", label: "Reset view" },
+                  { key: "Double-click canvas", label: "Drop new node" },
+                  { key: "?", label: "Toggle this panel" },
+                ].map(({ key, label }) => (
+                  <tr key={key}>
+                    <td className="py-1.5 pr-3 font-medium text-foreground">{label}</td>
+                    <td className="py-1.5 text-right">
+                      <kbd className="inline-flex items-center rounded border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {key}
+                      </kbd>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-3 text-[10px] text-muted-foreground">
+              Edit-only shortcuts require Admin or Editor role.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div
         className="h-full w-full"
@@ -721,6 +844,7 @@ export function MapEditorCanvas({
       >
         <ReactFlow
           className="map-editor-flow"
+          connectionRadius={28}
           defaultEdgeOptions={{
             markerEnd: {
               type: MarkerType.ArrowClosed,
@@ -729,9 +853,10 @@ export function MapEditorCanvas({
               stroke: "hsl(var(--muted-foreground) / 0.58)",
               strokeWidth: 1.8,
             },
-            type: "smoothstep",
+            type: "mapEdge",
           }}
           deleteKeyCode={null}
+          edgeTypes={edgeTypes}
           edges={decoratedEdges}
           edgesFocusable
           edgesUpdatable={canEdit}

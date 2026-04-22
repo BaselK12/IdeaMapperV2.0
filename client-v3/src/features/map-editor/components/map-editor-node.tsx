@@ -1,3 +1,4 @@
+import { ExternalLink, Link2 } from "lucide-react"
 import { Handle, Position, type NodeProps } from "reactflow"
 
 import type { MapEditorNodeData } from "@/features/map-editor/types/map-editor-types"
@@ -95,6 +96,14 @@ function isSafeHttpUrl(url: string) {
   }
 }
 
+function getLinkDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "")
+  } catch {
+    return url.length > 32 ? `${url.slice(0, 30)}…` : url
+  }
+}
+
 export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) {
   const inlineData = data as InlineNodeData
   const color = data.color ?? "violet"
@@ -116,12 +125,12 @@ export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) 
       )}
     >
       <Handle
-        className="!h-2.5 !w-2.5 !border-background !bg-primary/80"
+        className="!h-4 !w-4 !cursor-crosshair !border-2 !border-background !bg-primary/70 !transition-all hover:!scale-110 hover:!bg-primary"
         position={Position.Left}
         type="target"
       />
       <Handle
-        className="!h-2.5 !w-2.5 !border-background !bg-primary/80"
+        className="!h-4 !w-4 !cursor-crosshair !border-2 !border-background !bg-primary/70 !transition-all hover:!scale-110 hover:!bg-primary"
         position={Position.Right}
         type="source"
       />
@@ -169,12 +178,23 @@ export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) 
             />
           ) : (
             <a
-              className="block px-3 py-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+              className="group flex items-center gap-2 px-2.5 py-2 transition-colors hover:bg-primary-soft/30"
               href={media.url}
               rel="noreferrer"
               target="_blank"
             >
-              {mediaTitle}
+              <span className="flex size-6 shrink-0 items-center justify-center rounded border border-border/70 bg-background/80 text-primary">
+                <Link2 className="size-3" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[11px] font-medium text-foreground group-hover:text-primary">
+                  {media.title?.trim() ? media.title.trim() : getLinkDomain(media.url)}
+                </span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {media.title?.trim() ? getLinkDomain(media.url) : "External link"}
+                </span>
+              </span>
+              <ExternalLink className="size-3 shrink-0 text-muted-foreground/50 group-hover:text-primary/60" />
             </a>
           )}
         </div>

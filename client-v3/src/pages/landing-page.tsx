@@ -267,81 +267,55 @@ export function LandingPage() {
         </section>
 
         <section
-          className="mt-20 animate-fade-up rounded-[1.75rem] border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8"
+          className="mt-20 animate-fade-up rounded-[1.75rem] border border-border/70 bg-card/90 shadow-sm"
           id="demo-section"
         >
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <span className="inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-foreground">
-                Product workflow
-              </span>
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Move from map library to live editing without a handoff.
-              </h2>
-              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                The product flow stays compact: reopen the right map, enter the
-                workspace, and keep collaboration visible while the graph changes.
-              </p>
-            </div>
-            <div
-              className={cn(
-                "w-full rounded-2xl border p-4 shadow-sm lg:w-auto lg:min-w-[18rem]",
-                isDark
-                  ? "border-primary/20 bg-primary/10"
-                  : "border-primary/15 bg-primary-soft/65"
-              )}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                Start with Branchly
-              </p>
-              <p className="mt-1 text-sm text-foreground">
-                Create your first shared map and move straight into the workspace.
-              </p>
-              <Button
-                asChild
-                className="mt-3 w-full gap-2 lg:w-auto"
-              >
+          <div className="border-b border-border/70 px-6 py-6 sm:px-8 sm:py-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <span className="inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-foreground">
+                  Product workflow
+                </span>
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  From map library to live editing in one flow.
+                </h2>
+                <p className="max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  Reopen the right map, enter the workspace, and keep
+                  collaboration visible as the graph evolves.
+                </p>
+              </div>
+              <Button asChild className="shrink-0 gap-2 sm:mt-1">
                 <Link to="/auth?tab=signup">
-                  Create your first shared map
+                  Get started
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </div>
           </div>
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)] lg:items-start">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div
               className={cn(
-                "rounded-[1.5rem] border p-3 shadow-sm",
-                isDark ? "border-primary/12 bg-background/55" : "border-border/70 bg-background/80"
+                "border-b p-5 lg:border-b-0 lg:border-r sm:p-6",
+                isDark ? "border-white/8" : "border-border/70"
               )}
             >
-              <div
-                className={cn(
-                  "flex items-center justify-between rounded-[1rem] border px-3 py-2",
-                  isDark ? "border-white/8 bg-white/[0.03]" : "border-border/70 bg-card/85"
-                )}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="grid size-8 place-content-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-                    <Sparkles className="size-3.5" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                      Branchly dashboard
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Find the right map and reopen it quickly
-                    </p>
-                  </div>
-                </div>
-                <span className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground">
-                  Clean demo view
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="grid size-7 place-content-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                  <Sparkles className="size-3.5" />
                 </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                    Branchly dashboard
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Find and reopen the right map quickly
+                  </p>
+                </div>
               </div>
               <div
                 className={cn(
-                  "mt-3 overflow-hidden rounded-[1.15rem] border",
+                  "overflow-hidden rounded-[1.15rem] border shadow-sm",
                   isDark ? "border-white/8 bg-[#100d1a]" : "border-border/70 bg-card"
                 )}
               >
@@ -349,18 +323,23 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              {workflowSteps.map((step, index) => (
-                <div
-                  className="rounded-2xl border border-border/70 bg-background/75 p-4 shadow-sm"
-                  key={step.title}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary-soft/70 text-sm font-semibold text-primary">
-                      0{index + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
+            <div className="p-5 sm:p-6">
+              <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                How it works
+              </p>
+              <div className="relative space-y-0">
+                {workflowSteps.map((step, index) => (
+                  <div className="relative flex gap-4" key={step.title}>
+                    <div className="flex flex-col items-center">
+                      <span className="relative z-10 inline-flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-primary/30 bg-primary-soft text-xs font-bold text-primary">
+                        {index + 1}
+                      </span>
+                      {index < workflowSteps.length - 1 ? (
+                        <div className="mt-1 w-px flex-1 bg-border/60" />
+                      ) : null}
+                    </div>
+                    <div className={cn("pb-6", index === workflowSteps.length - 1 && "pb-0")}>
+                      <p className="pt-1 text-sm font-semibold text-foreground">
                         {step.title}
                       </p>
                       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -368,8 +347,8 @@ export function LandingPage() {
                       </p>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </section>
