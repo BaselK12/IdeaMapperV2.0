@@ -13,8 +13,6 @@ import {
   Image,
   LayoutList,
   Link2,
-  Maximize2,
-  Minimize2,
   MoreHorizontal,
   Network,
   Palette,
@@ -353,7 +351,7 @@ function getCollapsedDescendantNodeIds(
 export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const workspaceSurfaceRef = useRef<HTMLDivElement | null>(null)
+  const editorWorkspaceRef = useRef<HTMLDivElement | null>(null)
   const toastIdRef = useRef(0)
   const toastTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -410,7 +408,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === workspaceSurfaceRef.current)
+      setIsFullscreen(document.fullscreenElement === editorWorkspaceRef.current)
     }
 
     document.addEventListener("fullscreenchange", handleFullscreenChange)
@@ -494,7 +492,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         return
       }
 
-      await workspaceSurfaceRef.current?.requestFullscreen()
+      await editorWorkspaceRef.current?.requestFullscreen()
       publishToast("Fullscreen opened.", "info")
     } catch {
       setIsFullscreen(false)
@@ -769,13 +767,6 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     <section
       className="animate-fade-up flex w-full flex-col rounded-2xl border border-border/70 bg-card/95 shadow-lg xl:h-[calc(100vh-2rem)] xl:min-h-[640px] xl:overflow-hidden"
     >
-      <div
-        className={cn(
-          "flex min-h-0 w-full flex-1 flex-col",
-          isFullscreen && "h-screen min-h-screen overflow-hidden bg-card/95"
-        )}
-        ref={workspaceSurfaceRef}
-      >
       <header className="sticky top-0 z-30 border-b border-border/70 bg-card/95 px-4 py-2 backdrop-blur md:px-5">
         <div className="flex items-center gap-2">
           <Button asChild className="shrink-0" size="sm" variant="ghost">
@@ -848,26 +839,6 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <span className="hidden sm:inline">More</span>
             </Button>
             <Button
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              className="h-7 px-2 text-[11px]"
-              onClick={() => {
-                void toggleFullscreen()
-              }}
-              size="sm"
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              type="button"
-              variant="outline"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="size-3.5" />
-              ) : (
-                <Maximize2 className="size-3.5" />
-              )}
-              <span className="hidden md:inline">
-                {isFullscreen ? "Exit" : "Fullscreen"}
-              </span>
-            </Button>
-            <Button
               aria-label={isFocusMode ? "Exit presentation mode" : "Enter presentation mode"}
               className="h-7 px-2 text-[11px]"
               onClick={toggleFocusMode}
@@ -902,7 +873,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           "grid xl:min-h-0 xl:flex-1",
           isFocusMode
             ? "gap-0 p-2 xl:grid-cols-1"
-            : "gap-4 p-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]"
+            : "gap-4 p-4 xl:grid-cols-[260px_minmax(0,1fr)]"
         )}
       >
         <aside
@@ -1004,191 +975,203 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </aside>
 
-        <main
+        <div
           className={cn(
-            "order-1 relative min-h-[26rem] overflow-hidden border border-border/70 bg-card/90 xl:order-none xl:min-h-[360px]",
-            isFocusMode ? "rounded-xl" : "rounded-2xl"
+            "order-1 grid min-w-0 min-h-[26rem] gap-4 xl:order-none xl:min-h-0",
+            isFocusMode ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]",
+            isFullscreen && "h-screen min-h-screen overflow-hidden bg-card/95 p-4"
           )}
+          ref={editorWorkspaceRef}
         >
-          <div
+          <main
             className={cn(
-              "relative flex min-h-[26rem] flex-col xl:h-full xl:min-h-0",
-              isFocusMode ? "p-2 md:p-3" : "p-4 md:p-6"
+              "relative min-h-[26rem] overflow-hidden border border-border/70 bg-card/90 xl:min-h-[360px]",
+              isFocusMode ? "rounded-xl" : "rounded-2xl"
             )}
           >
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
-                Canvas
-              </span>
-              {isFocusMode ? (
-                <span className={cn("rounded-full border px-2.5 py-1", infoStatusClassName)}>
-                  Presentation mode
-                </span>
-              ) : null}
-              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
-                {formatRole(map.role)} access
-              </span>
-              <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
-                Last edited {formatLastEdited(mapLastEdited)}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full border px-2.5 py-1",
-                  savePill.className
-                )}
-                data-testid="save-status-pill"
-              >
-                {savePill.label}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full border px-2.5 py-1",
-                  syncPill.className
-                )}
-              >
-                {syncPill.label}
-              </span>
-              {cursorPill ? (
-                <span className={cn("rounded-full border px-2.5 py-1", cursorPill.className)}>
-                  {cursorPill.label}
-                </span>
-              ) : null}
-              {editor.hasRemoteUpdateAvailable ? (
-                <span className={cn("rounded-full border px-2.5 py-1", warningStatusClassName)}>
-                  Newer saved version available
-                </span>
-              ) : null}
-              {hiddenNodeCount > 0 ? (
+            <div
+              className={cn(
+                "relative flex min-h-[26rem] flex-col xl:h-full xl:min-h-0",
+                isFocusMode ? "p-2 md:p-3" : "p-4 md:p-6"
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
-                  {hiddenNodeCount} hidden in collapsed branches
+                  Canvas
                 </span>
-              ) : null}
-            </div>
-
-            {editor.hasRemoteUpdateAvailable ? (
-              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
-                <p className="text-xs font-medium">
-                  A newer saved version was published in another session.
-                </p>
-                <p className="mt-0.5 text-xs opacity-90">
-                  Your local unsaved edits are still safe in this tab. Save to keep them,
-                  or reload to replace them with the latest persisted graph.
-                </p>
-                <Button
-                  className="mt-2 h-7 px-2.5 text-xs"
-                  disabled={editor.saveStatus === "saving"}
-                  onClick={editor.reloadFromRemote}
-                  size="sm"
-                  variant="outline"
+                {isFocusMode ? (
+                  <span className={cn("rounded-full border px-2.5 py-1", infoStatusClassName)}>
+                    Presentation mode
+                  </span>
+                ) : null}
+                <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
+                  {formatRole(map.role)} access
+                </span>
+                <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
+                  Last edited {formatLastEdited(mapLastEdited)}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2.5 py-1",
+                    savePill.className
+                  )}
+                  data-testid="save-status-pill"
                 >
-                  {editor.saveStatus === "saving" ? "Saving local edits..." : "Reload latest"}
-                </Button>
-              </div>
-            ) : null}
-
-            {editor.saveError ? (
-              <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-destructive">
-                <p className="text-xs font-medium">Could not save latest edit</p>
-                <p className="mt-0.5 text-xs opacity-90">{editor.saveError}</p>
-                {editor.canEdit ? (
-                  <Button className="mt-2 h-7 px-2.5 text-xs" onClick={editor.retrySave} size="sm" variant="outline">
-                    Retry save
-                  </Button>
+                  {savePill.label}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2.5 py-1",
+                    syncPill.className
+                  )}
+                >
+                  {syncPill.label}
+                </span>
+                {cursorPill ? (
+                  <span className={cn("rounded-full border px-2.5 py-1", cursorPill.className)}>
+                    {cursorPill.label}
+                  </span>
+                ) : null}
+                {editor.hasRemoteUpdateAvailable ? (
+                  <span className={cn("rounded-full border px-2.5 py-1", warningStatusClassName)}>
+                    Newer saved version available
+                  </span>
+                ) : null}
+                {hiddenNodeCount > 0 ? (
+                  <span className="rounded-full border border-border/80 bg-card/95 px-2.5 py-1">
+                    {hiddenNodeCount} hidden in collapsed branches
+                  </span>
                 ) : null}
               </div>
-            ) : null}
 
-            {editor.selectionInvalidationNotice ? (
-              <div className={cn("mt-2 rounded-lg border px-3 py-2", infoStatusClassName)}>
-                <p className="text-xs font-medium">Selection updated</p>
-                <p className="mt-0.5 text-xs opacity-90">
-                  {editor.selectionInvalidationNotice}
-                </p>
+              {editor.hasRemoteUpdateAvailable ? (
+                <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                  <p className="text-xs font-medium">
+                    A newer saved version was published in another session.
+                  </p>
+                  <p className="mt-0.5 text-xs opacity-90">
+                    Your local unsaved edits are still safe in this tab. Save to keep them,
+                    or reload to replace them with the latest persisted graph.
+                  </p>
+                  <Button
+                    className="mt-2 h-7 px-2.5 text-xs"
+                    disabled={editor.saveStatus === "saving"}
+                    onClick={editor.reloadFromRemote}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {editor.saveStatus === "saving" ? "Saving local edits..." : "Reload latest"}
+                  </Button>
+                </div>
+              ) : null}
+
+              {editor.saveError ? (
+                <div className="mt-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-destructive">
+                  <p className="text-xs font-medium">Could not save latest edit</p>
+                  <p className="mt-0.5 text-xs opacity-90">{editor.saveError}</p>
+                  {editor.canEdit ? (
+                    <Button className="mt-2 h-7 px-2.5 text-xs" onClick={editor.retrySave} size="sm" variant="outline">
+                      Retry save
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {editor.selectionInvalidationNotice ? (
+                <div className={cn("mt-2 rounded-lg border px-3 py-2", infoStatusClassName)}>
+                  <p className="text-xs font-medium">Selection updated</p>
+                  <p className="mt-0.5 text-xs opacity-90">
+                    {editor.selectionInvalidationNotice}
+                  </p>
+                </div>
+              ) : null}
+
+              {editor.syncError ? (
+                <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                  <p className="text-xs font-medium">Live collaboration is reconnecting</p>
+                  <p className="mt-0.5 text-xs opacity-90">{editor.syncError}</p>
+                  <p className="mt-0.5 text-xs opacity-90">
+                    You can keep editing; changes still save from this tab.
+                  </p>
+                </div>
+              ) : null}
+
+              {liveCursors.realtimeStatus === "offline" ? (
+                <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
+                  <p className="text-xs font-medium">Live cursors are paused</p>
+                  <p className="mt-0.5 text-xs opacity-90">
+                    Cursor previews will return automatically when the live channel reconnects.
+                  </p>
+                </div>
+              ) : null}
+
+              {isFocusMode ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                  <span>
+                    Navigator and inspector are tucked away for presenting. Use F to fit
+                    the map or 0 to reset the view.
+                  </span>
+                  <Button
+                    className="h-7 px-2.5 text-xs"
+                    onClick={toggleFocusMode}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Exit presentation
+                  </Button>
+                </div>
+              ) : null}
+
+              <div className="relative mt-3 h-[22rem] sm:h-[26rem] xl:h-auto xl:min-h-0 xl:flex-1">
+                <MapEditorCanvas
+                  canRedo={editor.canRedo}
+                  canEdit={editor.canEdit}
+                  canUndo={editor.canUndo}
+                  edges={visibleEdges}
+                  focusRequest={focusRequest}
+                  hasSelection={editor.hasSelection}
+                  isFullscreen={isFullscreen}
+                  isLoading={editor.isLoading}
+                  loadError={editor.loadError}
+                  nodes={visibleNodes}
+                  onAddNode={editor.addNode}
+                  onClearSelection={editor.clearSelection}
+                  onConnect={editor.handleConnect}
+                  onDeleteSelection={editor.deleteSelection}
+                  onEdgesChange={editor.handleEdgesChange}
+                  onNodesChange={editor.handleNodesChange}
+                  onOrganizeMap={handleOrganizeMap}
+                  onRedo={handleRedo}
+                  onCursorPositionChange={liveCursors.sendCursorPosition}
+                  onNodeDragEnd={liveCursors.endNodeDrag}
+                  onNodeDragPositionChange={liveCursors.sendNodeDragPosition}
+                  onToggleFullscreen={() => {
+                    void toggleFullscreen()
+                  }}
+                  onRetryLoad={editor.retryLoad}
+                  onSelectionChange={editor.handleSelectionChange}
+                  onUndo={handleUndo}
+                  onUpdateNodeTitle={editor.updateNodeTitle}
+                  remoteCursors={liveCursors.remoteCursors}
+                  remoteNodeDrags={liveCursors.remoteNodeDrags}
+                />
               </div>
-            ) : null}
-
-            {editor.syncError ? (
-              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
-                <p className="text-xs font-medium">Live collaboration is reconnecting</p>
-                <p className="mt-0.5 text-xs opacity-90">{editor.syncError}</p>
-                <p className="mt-0.5 text-xs opacity-90">
-                  You can keep editing; changes still save from this tab.
-                </p>
-              </div>
-            ) : null}
-
-            {liveCursors.realtimeStatus === "offline" ? (
-              <div className={cn("mt-2 rounded-lg border px-3 py-2", warningStatusClassName)}>
-                <p className="text-xs font-medium">Live cursors are paused</p>
-                <p className="mt-0.5 text-xs opacity-90">
-                  Cursor previews will return automatically when the live channel reconnects.
-                </p>
-              </div>
-            ) : null}
-
-            {isFocusMode ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                <span>
-                  Navigator and inspector are tucked away for presenting. Use F to fit
-                  the map or 0 to reset the view.
-                </span>
-                <Button
-                  className="h-7 px-2.5 text-xs"
-                  onClick={toggleFocusMode}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Exit presentation
-                </Button>
-              </div>
-            ) : null}
-
-            <div className="mt-3 h-[22rem] sm:h-[26rem] xl:h-auto xl:min-h-0 xl:flex-1">
-              <MapEditorCanvas
-                canRedo={editor.canRedo}
-                canEdit={editor.canEdit}
-                canUndo={editor.canUndo}
-                edges={visibleEdges}
-                focusRequest={focusRequest}
-                hasSelection={editor.hasSelection}
-                isLoading={editor.isLoading}
-                loadError={editor.loadError}
-                nodes={visibleNodes}
-                onAddNode={editor.addNode}
-                onClearSelection={editor.clearSelection}
-                onConnect={editor.handleConnect}
-                onDeleteSelection={editor.deleteSelection}
-                onEdgesChange={editor.handleEdgesChange}
-                onNodesChange={editor.handleNodesChange}
-                onOrganizeMap={handleOrganizeMap}
-                onRedo={handleRedo}
-                onCursorPositionChange={liveCursors.sendCursorPosition}
-                onNodeDragEnd={liveCursors.endNodeDrag}
-                onNodeDragPositionChange={liveCursors.sendNodeDragPosition}
-                onRetryLoad={editor.retryLoad}
-                onSelectionChange={editor.handleSelectionChange}
-                onUndo={handleUndo}
-                onUpdateNodeTitle={editor.updateNodeTitle}
-                remoteCursors={liveCursors.remoteCursors}
-                remoteNodeDrags={liveCursors.remoteNodeDrags}
-              />
             </div>
-          </div>
-        </main>
+          </main>
 
-        <aside
-          className={cn(
-            "order-3 flex flex-col rounded-2xl border border-border/70 bg-card/90 xl:order-none xl:min-h-0",
-            isFocusMode && "hidden"
-          )}
-        >
-          <div className="shrink-0 border-b border-border/60 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              Inspector
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+          <aside
+            className={cn(
+              "order-3 flex flex-col rounded-2xl border border-border/70 bg-card/90 xl:min-h-0",
+              isFocusMode && "hidden"
+            )}
+          >
+            <div className="shrink-0 border-b border-border/60 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Inspector
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {editor.selectedNode ? (
             <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/95 p-3.5">
               <p className="text-sm font-medium text-foreground">Selected node</p>
@@ -1524,8 +1507,9 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </div>
             </div>
           </details>
-          </div>
-        </aside>
+            </div>
+          </aside>
+        </div>
       </div>
       {toasts.length > 0 ? (
         <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
@@ -1820,7 +1804,6 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </div>
       </ModalFrame>
-      </div>
     </section>
   )
 }

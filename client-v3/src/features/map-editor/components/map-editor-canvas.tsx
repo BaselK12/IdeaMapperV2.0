@@ -10,6 +10,8 @@ import {
 import {
   HelpCircle,
   LocateFixed,
+  Maximize2,
+  Minimize2,
   Network,
   Plus,
   Redo2,
@@ -220,6 +222,7 @@ type MapEditorCanvasProps = {
   edges: MapEditorEdge[]
   focusRequest: MapEditorCanvasFocusRequest | null
   hasSelection: boolean
+  isFullscreen: boolean
   isLoading: boolean
   loadError: string | null
   nodes: MapEditorFlowNode[]
@@ -234,6 +237,7 @@ type MapEditorCanvasProps = {
   onCursorPositionChange?: (position: XYPosition) => void
   onNodeDragEnd?: (nodeId: string) => void
   onNodeDragPositionChange?: (nodeId: string, position: XYPosition) => void
+  onToggleFullscreen: () => void
   onRetryLoad: () => void
   onSelectionChange: (selection: OnSelectionChangeParams) => void
   onUndo: () => void
@@ -290,6 +294,7 @@ export function MapEditorCanvas({
   edges,
   focusRequest,
   hasSelection,
+  isFullscreen,
   isLoading,
   loadError,
   nodes,
@@ -304,6 +309,7 @@ export function MapEditorCanvas({
   onCursorPositionChange,
   onNodeDragEnd,
   onNodeDragPositionChange,
+  onToggleFullscreen,
   onRetryLoad,
   onSelectionChange,
   onUndo,
@@ -825,6 +831,24 @@ export function MapEditorCanvas({
           variant="outline"
         >
           <RotateCcw className="size-4" />
+        </Button>
+        <Button
+          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          className="h-8 px-2.5"
+          onClick={onToggleFullscreen}
+          size="sm"
+          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          type="button"
+          variant={isFullscreen ? "secondary" : "outline"}
+        >
+          {isFullscreen ? (
+            <Minimize2 className="size-4" />
+          ) : (
+            <Maximize2 className="size-4" />
+          )}
+          <span className="hidden min-[1400px]:inline">
+            {isFullscreen ? "Exit" : "Fullscreen"}
+          </span>
         </Button>
         <Button
           aria-label="Keyboard shortcuts"
