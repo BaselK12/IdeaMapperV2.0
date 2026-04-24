@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js"
 import {
   ArrowLeft,
   CalendarClock,
+  ChevronDown,
   CheckCircle2,
   CircleDot,
   Clipboard,
@@ -352,7 +353,7 @@ function getCollapsedDescendantNodeIds(
 export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const workspaceRef = useRef<HTMLElement | null>(null)
+  const workspaceSurfaceRef = useRef<HTMLDivElement | null>(null)
   const toastIdRef = useRef(0)
   const toastTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -409,7 +410,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === workspaceRef.current)
+      setIsFullscreen(document.fullscreenElement === workspaceSurfaceRef.current)
     }
 
     document.addEventListener("fullscreenchange", handleFullscreenChange)
@@ -493,7 +494,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         return
       }
 
-      await workspaceRef.current?.requestFullscreen()
+      await workspaceSurfaceRef.current?.requestFullscreen()
       publishToast("Fullscreen opened.", "info")
     } catch {
       setIsFullscreen(false)
@@ -766,14 +767,15 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
   return (
     <section
-      className={cn(
-        "animate-fade-up flex w-full flex-col bg-card/95 shadow-lg",
-        isFullscreen
-          ? "h-screen min-h-screen rounded-none border-0 xl:h-screen xl:min-h-screen xl:overflow-hidden"
-          : "rounded-2xl border border-border/70 xl:h-[calc(100vh-2rem)] xl:min-h-[640px] xl:overflow-hidden"
-      )}
-      ref={workspaceRef}
+      className="animate-fade-up flex w-full flex-col rounded-2xl border border-border/70 bg-card/95 shadow-lg xl:h-[calc(100vh-2rem)] xl:min-h-[640px] xl:overflow-hidden"
     >
+      <div
+        className={cn(
+          "flex min-h-0 w-full flex-1 flex-col",
+          isFullscreen && "h-screen min-h-screen overflow-hidden bg-card/95"
+        )}
+        ref={workspaceSurfaceRef}
+      >
       <header className="sticky top-0 z-30 border-b border-border/70 bg-card/95 px-4 py-2 backdrop-blur md:px-5">
         <div className="flex items-center gap-2">
           <Button asChild className="shrink-0" size="sm" variant="ghost">
@@ -804,12 +806,14 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
           <div className="flex shrink-0 items-center gap-1">
             <Button
+              aria-label="Share map"
               className="h-7 px-2 text-[11px]"
               onClick={() => {
                 setShareFeedback(null)
                 setActiveDialog("share")
               }}
               size="sm"
+              title="Share map"
               type="button"
               variant="outline"
             >
@@ -817,12 +821,14 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <span className="hidden sm:inline">Share</span>
             </Button>
             <Button
+              aria-label="Export map"
               className="h-7 px-2 text-[11px]"
               onClick={() => {
                 setExportFeedback(null)
                 setActiveDialog("export")
               }}
               size="sm"
+              title="Export map"
               type="button"
               variant="outline"
             >
@@ -830,9 +836,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <span className="hidden sm:inline">Export</span>
             </Button>
             <Button
+              aria-label="More map actions"
               className="h-7 px-2 text-[11px]"
               onClick={() => setActiveDialog("more")}
               size="sm"
+              title="More map actions"
               type="button"
               variant="outline"
             >
@@ -840,11 +848,13 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               <span className="hidden sm:inline">More</span>
             </Button>
             <Button
+              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               className="h-7 px-2 text-[11px]"
               onClick={() => {
                 void toggleFullscreen()
               }}
               size="sm"
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               type="button"
               variant="outline"
             >
@@ -858,9 +868,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </span>
             </Button>
             <Button
+              aria-label={isFocusMode ? "Exit presentation mode" : "Enter presentation mode"}
               className="h-7 px-2 text-[11px]"
               onClick={toggleFocusMode}
               size="sm"
+              title={isFocusMode ? "Exit presentation mode" : "Enter presentation mode"}
               type="button"
               variant={isFocusMode ? "secondary" : "outline"}
             >
@@ -1132,7 +1144,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               </div>
             ) : null}
 
-            <div className="mt-3 min-h-[22rem] flex-1 sm:min-h-[26rem] xl:min-h-0">
+            <div className="mt-3 h-[22rem] sm:h-[26rem] xl:h-auto xl:min-h-0 xl:flex-1">
               <MapEditorCanvas
                 canRedo={editor.canRedo}
                 canEdit={editor.canEdit}
@@ -1177,7 +1189,6 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
-
           {editor.selectedNode ? (
             <div className="mt-3 space-y-3 rounded-xl border border-border/80 bg-card/95 p-3.5">
               <p className="text-sm font-medium text-foreground">Selected node</p>
@@ -1299,77 +1310,88 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   value={selectedNodeDescription}
                 />
               </div>
-              <div className="space-y-2 rounded-xl border border-border/80 bg-background/70 p-3">
-                <p className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  {selectedNodeMedia?.type === "video" ? (
-                    <Video className="size-3.5" />
-                  ) : selectedNodeMedia?.type === "link" ? (
-                    <Link2 className="size-3.5" />
-                  ) : (
-                    <Image className="size-3.5" />
-                  )}
-                  Node media
-                </p>
-                <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
-                  <select
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={isReadOnly}
-                    onChange={(event) =>
-                      updateSelectedNodeMediaField("type", event.target.value)
-                    }
-                    value={selectedNodeMedia?.type ?? "image"}
-                  >
-                    <option value="image">Image</option>
-                    <option value="video">Video</option>
-                    <option value="link">Link</option>
-                  </select>
-                  <Input
-                    className="h-9"
-                    disabled={isReadOnly}
-                    onChange={(event) =>
-                      updateSelectedNodeMediaField("url", event.target.value)
-                    }
-                    placeholder="Paste a public URL"
-                    value={selectedNodeMedia?.url ?? ""}
-                  />
+              <details className="group rounded-xl border border-border/80 bg-background/70">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+                  <span>Advanced details</span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/75">
+                    Media, links
+                    <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                  </span>
+                </summary>
+                <div className="space-y-3 border-t border-border/70 p-3">
+                  <div className="space-y-2">
+                    <p className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      {selectedNodeMedia?.type === "video" ? (
+                        <Video className="size-3.5" />
+                      ) : selectedNodeMedia?.type === "link" ? (
+                        <Link2 className="size-3.5" />
+                      ) : (
+                        <Image className="size-3.5" />
+                      )}
+                      Node media
+                    </p>
+                    <div className="grid gap-2">
+                      <select
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isReadOnly}
+                        onChange={(event) =>
+                          updateSelectedNodeMediaField("type", event.target.value)
+                        }
+                        value={selectedNodeMedia?.type ?? "image"}
+                      >
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                        <option value="link">Link</option>
+                      </select>
+                      <Input
+                        className="h-9"
+                        disabled={isReadOnly}
+                        onChange={(event) =>
+                          updateSelectedNodeMediaField("url", event.target.value)
+                        }
+                        placeholder="Paste a public URL"
+                        value={selectedNodeMedia?.url ?? ""}
+                      />
+                    </div>
+                    <Input
+                      className="h-9"
+                      disabled={isReadOnly || !selectedNodeMedia?.url}
+                      onChange={(event) =>
+                        updateSelectedNodeMediaField("title", event.target.value)
+                      }
+                      placeholder="Media title"
+                      value={selectedNodeMedia?.title ?? ""}
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Images, YouTube/Vimeo links, and direct video files preview on the node.
+                      </p>
+                      {selectedNodeMedia ? (
+                        <Button
+                          className="h-7 px-2 text-[11px]"
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            updateSelectedNodeMedia(null)
+                            publishToast("Node media removed.", "info")
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2 text-xs">
+                    <p className="text-muted-foreground">Connections</p>
+                    <p className="font-medium text-foreground">
+                      {editor.selectedNode.incomingEdgeCount} incoming,{" "}
+                      {editor.selectedNode.outgoingEdgeCount} outgoing
+                    </p>
+                  </div>
                 </div>
-                <Input
-                  className="h-9"
-                  disabled={isReadOnly || !selectedNodeMedia?.url}
-                  onChange={(event) =>
-                    updateSelectedNodeMediaField("title", event.target.value)
-                  }
-                  placeholder="Media title"
-                  value={selectedNodeMedia?.title ?? ""}
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-muted-foreground">
-                    Images, YouTube/Vimeo links, and direct video files preview on the node.
-                  </p>
-                  {selectedNodeMedia ? (
-                    <Button
-                      className="h-7 px-2 text-[11px]"
-                      disabled={isReadOnly}
-                      onClick={() => {
-                        updateSelectedNodeMedia(null)
-                        publishToast("Node media removed.", "info")
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Remove
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/80 bg-background/95 px-2.5 py-2 text-xs">
-                <p className="text-muted-foreground">Connections</p>
-                <p className="font-medium text-foreground">
-                  {editor.selectedNode.incomingEdgeCount} incoming,{" "}
-                  {editor.selectedNode.outgoingEdgeCount} outgoing
-                </p>
-              </div>
+              </details>
             </div>
           ) : editor.selectedEdge ? (
             <div className="mt-3 space-y-2.5 rounded-xl border border-border/80 bg-card/95 p-3.5">
@@ -1461,43 +1483,50 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             </div>
           )}
 
-          <Separator className="my-4" />
-
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Access</span>
-              <span className="font-medium text-foreground">{formatRole(map.role)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Nodes</span>
-              <span className="font-medium text-foreground">{editor.nodeCount}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Last edited</span>
-              <span className="font-medium text-foreground">
-                {formatLastEdited(mapLastEdited)}
+          <details className="group mt-3 rounded-xl border border-border/80 bg-card/90">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex items-center gap-2">
+                <CalendarClock className="size-3.5" />
+                Map context
               </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/75">
+                {formatRole(map.role)}
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="space-y-4 border-t border-border/70 px-3.5 py-3">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Access</span>
+                  <span className="font-medium text-foreground">{formatRole(map.role)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Nodes</span>
+                  <span className="font-medium text-foreground">{editor.nodeCount}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Last edited</span>
+                  <span className="font-medium text-foreground">
+                    {formatLastEdited(mapLastEdited)}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Map description
+                </p>
+                <p className="rounded-xl border border-border/80 bg-background/80 px-3 py-2.5 text-xs text-muted-foreground">
+                  {map.description ||
+                    (canEditMapDetails
+                      ? "Add a description from More > Edit details."
+                      : "No description has been added yet.")}
+                </p>
+              </div>
             </div>
-          </div>
-
-          <Separator className="my-4" />
-
-          <div className="space-y-2">
-            <p className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <CalendarClock className="size-3.5" />
-              Map description
-            </p>
-            <p className="rounded-xl border border-border/80 bg-card/90 px-3 py-2.5 text-xs text-muted-foreground">
-              {map.description ||
-                (canEditMapDetails
-                  ? "Add a description from More > Edit details."
-                  : "No description has been added yet.")}
-            </p>
-          </div>
+          </details>
           </div>
         </aside>
       </div>
-
       {toasts.length > 0 ? (
         <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
           {toasts.map((toast) => (
@@ -1791,6 +1820,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </div>
       </ModalFrame>
+      </div>
     </section>
   )
 }

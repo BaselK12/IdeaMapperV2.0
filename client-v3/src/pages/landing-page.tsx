@@ -293,10 +293,10 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="grid min-w-0 gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div
               className={cn(
-                "border-b p-5 lg:border-b-0 lg:border-r sm:p-6",
+                "min-w-0 border-b p-5 lg:border-b-0 lg:border-r sm:p-6",
                 isDark ? "border-white/8" : "border-border/70"
               )}
             >
@@ -323,7 +323,7 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="p-5 sm:p-6">
+            <div className="min-w-0 p-5 sm:p-6">
               <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 How it works
               </p>

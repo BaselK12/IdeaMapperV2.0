@@ -56,6 +56,40 @@ type UseMapEditorParams = {
 const SAVE_DEBOUNCE_MS = 700
 const SELECTION_INVALIDATION_NOTICE_MS = 4800
 const GRAPH_HISTORY_LIMIT = 40
+const ORGANIZE_LAYOUT_ORIGIN = {
+  x: 120,
+  y: 140,
+}
+const ORGANIZE_COLUMN_GAP = 120
+const ORGANIZE_ROW_GAP = 72
+
+function getNodeLayoutSize(node: MapEditorNode) {
+  const measuredNode = node as MapEditorNode & {
+    measured?: {
+      height?: number
+      width?: number
+    }
+  }
+  const measuredWidth =
+    typeof measuredNode.measured?.width === "number"
+      ? measuredNode.measured.width
+      : typeof node.width === "number"
+        ? node.width
+        : null
+  const measuredHeight =
+    typeof measuredNode.measured?.height === "number"
+      ? measuredNode.measured.height
+      : typeof node.height === "number"
+        ? node.height
+        : null
+
+  return {
+    height:
+      measuredHeight ??
+      (node.data.media ? 212 : node.data.description?.trim() ? 124 : 88),
+    width: measuredWidth ?? 280,
+  }
+}
 
 type ReconciledGraphSelection = {
   edges: MapEditorEdge[]
@@ -1753,20 +1787,39 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     }
 
     const positionByNode = new Map<string, XYPosition>()
-    for (const [level, levelNodes] of nodesByLevel.entries()) {
+    const orderedLevels = Array.from(nodesByLevel.keys()).sort(
+      (firstLevel, secondLevel) => firstLevel - secondLevel
+    )
+    let columnStartX = ORGANIZE_LAYOUT_ORIGIN.x
+
+    for (const level of orderedLevels) {
+      const levelNodes = nodesByLevel.get(level) ?? []
       const sortedLevelNodes = [...levelNodes].sort((firstNode, secondNode) =>
         firstNode.position.y === secondNode.position.y
           ? firstNode.position.x - secondNode.position.x
           : firstNode.position.y - secondNode.position.y
       )
-      const verticalOffset = Math.max(0, (sortedLevelNodes.length - 1) * 95)
+
+      const nodeSizes = sortedLevelNodes.map((node) => getNodeLayoutSize(node))
+      const columnWidth = nodeSizes.reduce(
+        (largestWidth, size) => Math.max(largestWidth, size.width),
+        0
+      )
+      const totalColumnHeight =
+        nodeSizes.reduce((heightTotal, size) => heightTotal + size.height, 0) +
+        Math.max(0, sortedLevelNodes.length - 1) * ORGANIZE_ROW_GAP
+      let rowStartY = ORGANIZE_LAYOUT_ORIGIN.y - totalColumnHeight / 2
 
       sortedLevelNodes.forEach((node, index) => {
+        const nodeSize = nodeSizes[index]
         positionByNode.set(node.id, {
-          x: 120 + level * 340,
-          y: 140 + index * 190 - verticalOffset,
+          x: Math.round(columnStartX + (columnWidth - nodeSize.width) / 2),
+          y: Math.round(rowStartY),
         })
+        rowStartY += nodeSize.height + ORGANIZE_ROW_GAP
       })
+
+      columnStartX += columnWidth + ORGANIZE_COLUMN_GAP
     }
 
     const nextNodes = currentNodes.map((node) => {

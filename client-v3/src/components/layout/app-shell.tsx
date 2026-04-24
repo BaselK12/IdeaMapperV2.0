@@ -91,8 +91,8 @@ export function AppShell() {
       <div className="pointer-events-none absolute -right-28 top-24 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute left-0 top-52 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-3 px-3 py-3 md:flex-row md:gap-6 md:px-6 md:py-6">
-        <aside className="animate-fade-up hidden w-full flex-col rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm md:sticky md:top-6 md:flex md:w-[18rem] md:self-start md:p-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-3 px-3 py-3 md:px-6 md:py-6 lg:flex-row lg:gap-6">
+        <aside className="animate-fade-up hidden w-full flex-col rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm lg:sticky lg:top-6 lg:flex lg:w-[18rem] lg:self-start lg:p-4">
           <div className="rounded-xl border border-border/70 bg-background/80 p-3.5">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-10 place-content-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
@@ -173,7 +173,7 @@ export function AppShell() {
         </aside>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="animate-fade-up rounded-2xl border border-border/70 bg-card/90 px-3 py-2.5 shadow-sm md:hidden">
+          <div className="animate-fade-up rounded-2xl border border-border/70 bg-card/90 px-3 py-2.5 shadow-sm lg:hidden">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -233,7 +233,7 @@ export function AppShell() {
           <main
             className={cn(
               "min-h-0 flex-1 pb-10",
-              !isDashboardRoute && "md:pt-1"
+              !isDashboardRoute && "lg:pt-1"
             )}
           >
             <Outlet />

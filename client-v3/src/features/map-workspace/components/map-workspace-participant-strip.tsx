@@ -50,7 +50,7 @@ export function MapWorkspaceParticipantStrip({
   const overflowCount = Math.max(0, participants.length - MAX_AVATARS)
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-2.5 py-1.5">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-card/80 px-2.5 py-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         Participants
       </span>
@@ -64,12 +64,11 @@ export function MapWorkspaceParticipantStrip({
       ) : (
         <>
           {visibleAvatars.length > 0 ? (
-            <div className="flex items-center">
-              {visibleAvatars.map((p, index) => (
+            <div className="flex max-w-full flex-wrap items-center gap-1.5">
+              {visibleAvatars.map((p) => (
                 <span
                   className={cn(
-                    "relative inline-flex size-5 items-center justify-center rounded-full border text-[9px] font-semibold uppercase",
-                    index > 0 ? "-ml-1.5" : "",
+                    "relative inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold uppercase",
                     p.isCurrentUser
                       ? "border-primary/60 bg-primary-soft text-primary"
                       : "border-border/80 bg-muted/80 text-foreground"
@@ -80,21 +79,21 @@ export function MapWorkspaceParticipantStrip({
                   {initialsFromName(p.displayName)}
                   <span
                     className={cn(
-                      "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-card",
+                      "absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-card",
                       presenceDotClassName(p.presence)
                     )}
                   />
                 </span>
               ))}
               {overflowCount > 0 ? (
-                <span className="-ml-1.5 inline-flex size-5 items-center justify-center rounded-full border border-border/70 bg-card/90 text-[9px] font-semibold text-muted-foreground">
+                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/90 text-[10px] font-semibold text-muted-foreground">
                   +{overflowCount}
                 </span>
               ) : null}
             </div>
           ) : null}
 
-          <span className="text-[10px] text-muted-foreground">
+          <span className="whitespace-nowrap text-[10px] text-muted-foreground">
             {onlineCount} online · {offlineCount} offline
           </span>
 

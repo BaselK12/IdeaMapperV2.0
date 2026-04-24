@@ -15,6 +15,7 @@ import {
   Redo2,
   RotateCcw,
   Sparkles,
+  Trash2,
   Undo2,
   X,
 } from "lucide-react"
@@ -149,7 +150,9 @@ const reactFlowChromeStyles = `
   }
 
   .map-editor-flow .react-flow__minimap {
+    height: 7rem;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+    width: 10rem;
   }
 
   .map-editor-flow .react-flow__controls {
@@ -159,6 +162,16 @@ const reactFlowChromeStyles = `
   .dark .map-editor-flow .react-flow__minimap,
   .dark .map-editor-flow .react-flow__controls {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  @media (max-width: 640px) {
+    .map-editor-flow .react-flow__minimap {
+      display: none;
+    }
+
+    .map-editor-flow .react-flow__controls {
+      display: none;
+    }
   }
 `
 
@@ -301,6 +314,7 @@ export function MapEditorCanvas({
   const flowContainerRef = useRef<HTMLDivElement | null>(null)
   const reactFlowRef = useRef<ReactFlowInstance | null>(null)
   const hasInitialFitRef = useRef(false)
+  const [flowReadyVersion, setFlowReadyVersion] = useState(0)
   const [viewport, setViewport] = useState<Viewport>({
     x: 0,
     y: 0,
@@ -313,6 +327,7 @@ export function MapEditorCanvas({
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowRef.current = instance
+    setFlowReadyVersion((currentVersion) => currentVersion + 1)
     setViewport(instance.getViewport())
   }, [])
 
@@ -437,26 +452,48 @@ export function MapEditorCanvas({
   useEffect(() => {
     if (isLoading) {
       hasInitialFitRef.current = false
+      reactFlowRef.current = null
     }
   }, [isLoading])
 
   useEffect(() => {
-    if (isLoading || loadError || !reactFlowRef.current || hasInitialFitRef.current) {
+    if (
+      isLoading ||
+      loadError ||
+      flowReadyVersion === 0 ||
+      !reactFlowRef.current ||
+      hasInitialFitRef.current
+    ) {
       return
     }
 
-    hasInitialFitRef.current = true
     if (nodes.length === 0) {
       return
     }
 
-    requestAnimationFrame(() => {
-      reactFlowRef.current?.fitView({
-        duration: 320,
-        padding: 0.2,
+    let firstFrame = 0
+    let secondFrame = 0
+
+    firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        const bounds = flowContainerRef.current?.getBoundingClientRect()
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+          return
+        }
+
+        hasInitialFitRef.current = true
+        reactFlowRef.current?.fitView({
+          duration: 320,
+          padding: 0.2,
+        })
       })
     })
-  }, [isLoading, loadError, nodes.length])
+
+    return () => {
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+    }
+  }, [flowReadyVersion, isLoading, loadError, nodes.length])
 
   useEffect(() => {
     if (!focusRequest || !reactFlowRef.current) {
@@ -701,26 +738,32 @@ export function MapEditorCanvas({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.45)_1px,transparent_0)] [background-size:22px_22px]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/50 via-transparent to-background/60" />
 
-      <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2">
+      <div className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1.5 sm:left-3 sm:top-3 sm:max-w-[calc(100%-1.5rem)] sm:gap-2">
         {canEdit ? (
-          <Button onClick={handleAddNode} size="sm" variant="secondary">
+          <Button className="h-8 px-2.5" onClick={handleAddNode} size="sm" variant="secondary">
             <Plus className="size-4" />
-            Add node
+            <span className="hidden sm:inline">Add node</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         ) : null}
         {canEdit ? (
           <Button
+            aria-label="Delete selected node or connection"
+            className="h-8 px-2.5"
             disabled={!hasSelection}
             onClick={onDeleteSelection}
             size="sm"
+            title="Delete selection"
             variant="outline"
           >
-            Delete selection
+            <Trash2 className="size-4" />
+            <span className="hidden min-[1100px]:inline">Delete selection</span>
           </Button>
         ) : null}
         {canEdit ? (
           <Button
             aria-label="Undo latest change"
+            className="h-8 px-2.5"
             disabled={!canUndo}
             onClick={onUndo}
             size="sm"
@@ -734,6 +777,7 @@ export function MapEditorCanvas({
         {canEdit ? (
           <Button
             aria-label="Redo latest change"
+            className="h-8 px-2.5"
             disabled={!canRedo}
             onClick={onRedo}
             size="sm"
@@ -746,6 +790,8 @@ export function MapEditorCanvas({
         ) : null}
         {canEdit ? (
           <Button
+            aria-label="Organize map"
+            className="h-8 px-2.5"
             disabled={nodes.length < 2}
             onClick={onOrganizeMap}
             size="sm"
@@ -754,11 +800,12 @@ export function MapEditorCanvas({
             variant="outline"
           >
             <Network className="size-4" />
-            Organize
+            <span className="hidden min-[1400px]:inline">Organize</span>
           </Button>
         ) : null}
         <Button
           aria-label="Fit map to screen"
+          className="h-8 px-2.5"
           onClick={handleFitView}
           size="sm"
           title="Fit map to screen"
@@ -766,10 +813,11 @@ export function MapEditorCanvas({
           variant="outline"
         >
           <LocateFixed className="size-4" />
-          Fit
+          <span className="hidden min-[1400px]:inline">Fit</span>
         </Button>
         <Button
           aria-label="Reset view"
+          className="h-8 px-2.5"
           onClick={handleResetView}
           size="sm"
           title="Reset view"
@@ -780,6 +828,7 @@ export function MapEditorCanvas({
         </Button>
         <Button
           aria-label="Keyboard shortcuts"
+          className="h-8 px-2.5"
           onClick={() => setShowHelp((prev) => !prev)}
           size="sm"
           title="Keyboard shortcuts"
@@ -861,6 +910,7 @@ export function MapEditorCanvas({
           edgesFocusable
           edgesUpdatable={canEdit}
           elementsSelectable
+          minZoom={0.2}
           nodeTypes={nodeTypes}
           nodes={renderedNodes}
           nodesConnectable={canEdit}

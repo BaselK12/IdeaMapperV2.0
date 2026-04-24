@@ -328,7 +328,7 @@ export function DashboardPage() {
       </div>
 
       <Card className="animate-fade-up border-border/70 bg-card/95 shadow-md">
-        <CardHeader className="flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
+        <CardHeader className="flex flex-col gap-4 border-b border-border/70 pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-1">
             <CardTitle className="text-base md:text-lg">All maps</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -338,7 +338,7 @@ export function DashboardPage() {
             </p>
           </div>
 
-          <div className="relative w-full md:max-w-xl lg:max-w-2xl">
+          <div className="relative w-full lg:max-w-2xl">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"

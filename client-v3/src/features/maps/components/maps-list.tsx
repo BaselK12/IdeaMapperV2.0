@@ -84,66 +84,72 @@ export function MapsList({
 
           return (
             <li key={map.id}>
-              <div className="group flex w-full flex-col gap-3 rounded-xl border border-border/70 bg-card px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary-soft/20 hover:shadow-sm md:flex-row md:items-center md:gap-4 md:py-4">
+              <div className="group flex w-full items-start gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary-soft/20 hover:shadow-sm md:items-center md:px-4 md:py-3.5">
                 <button
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:gap-4"
+                  className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:items-center md:gap-4"
                   onClick={() => onOpenMap(map.id)}
                   type="button"
                 >
-                  <div className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary-soft/55 text-primary shadow-sm transition-colors group-hover:bg-primary-soft">
+                  <div className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary-soft/55 text-primary shadow-sm transition-colors group-hover:bg-primary-soft md:size-10 md:rounded-2xl">
                     <Map className="size-4" />
                   </div>
 
-                  <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] font-semibold tracking-tight text-foreground md:text-base">
                       {map.name}
                     </p>
                     <p className="line-clamp-1 text-sm text-muted-foreground">
                       {description}
                     </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/70">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          roleClassName(map.role)
+                        )}
+                      >
+                        {formatRole(map.role)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock3 className="size-3" />
+                        {getLastEditedLabel(map.lastEdited)}
+                      </span>
+                    </div>
                   </div>
 
-                  <ArrowRight className="hidden size-4 shrink-0 text-muted-foreground/55 transition-all group-hover:translate-x-0.5 group-hover:text-foreground sm:block" />
+                  <ArrowRight className="mt-2 hidden size-4 shrink-0 text-muted-foreground/45 transition-all group-hover:translate-x-0.5 group-hover:text-foreground md:mt-0 md:block" />
                 </button>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 md:justify-end">
-                  <div className="hidden min-w-[9rem] items-center justify-end gap-1.5 text-[11px] text-muted-foreground/70 lg:flex">
-                    <Clock3 className="size-3.5" />
-                    {getLastEditedLabel(map.lastEdited)}
-                  </div>
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium",
-                      roleClassName(map.role)
-                    )}
-                  >
-                    {formatRole(map.role)}
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    {canManageDetails ? (
-                      <button
-                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/80 bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() => onEditMap(map)}
-                        type="button"
-                      >
-                        <PencilLine className="size-3.5" />
-                        Rename
-                      </button>
-                    ) : null}
+                <div className="flex shrink-0 items-center gap-1">
+                  {canManageDetails ? (
                     <button
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/80 bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => onRemoveMap(map)}
+                      aria-label={`Rename ${map.name}`}
+                      className="inline-flex size-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/80 hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => onEditMap(map)}
+                      title="Rename map"
                       type="button"
                     >
-                      {isOwner ? (
-                        <Trash2 className="size-3.5" />
-                      ) : (
-                        <LogOut className="size-3.5" />
-                      )}
-                      {isOwner ? "Delete" : "Leave"}
+                      <PencilLine className="size-4" />
                     </button>
-                  </div>
+                  ) : null}
+                  <button
+                    aria-label={`${isOwner ? "Delete" : "Leave"} ${map.name}`}
+                    className={cn(
+                      "inline-flex size-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/80 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isOwner
+                        ? "hover:text-destructive"
+                        : "hover:text-foreground"
+                    )}
+                    onClick={() => onRemoveMap(map)}
+                    title={isOwner ? "Delete map" : "Leave map"}
+                    type="button"
+                  >
+                    {isOwner ? (
+                      <Trash2 className="size-4" />
+                    ) : (
+                      <LogOut className="size-4" />
+                    )}
+                  </button>
                 </div>
               </div>
             </li>
