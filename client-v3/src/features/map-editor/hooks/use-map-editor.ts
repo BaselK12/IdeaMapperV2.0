@@ -23,6 +23,8 @@ import {
   MapEditorSaveError,
   saveMapEditorGraphById,
 } from "@/features/map-editor/api/map-editor-api"
+import { instantiateBranchStarterGraph } from "@/features/maps/api/map-presets"
+import type { BuiltInBranchStarter } from "@/features/maps/types/maps-types"
 import { supabase } from "@/lib/supabase"
 import type {
   MapEditorEdge,
@@ -1838,6 +1840,74 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     queuePersist(nextNodes, currentEdges)
   }, [canEdit, queuePersist])
 
+  const insertBranchStarter = useCallback(
+    (starter: BuiltInBranchStarter) => {
+      if (!canEdit || !selectedNodeIdRef.current) {
+        return null
+      }
+
+      const anchorNodeId = selectedNodeIdRef.current
+      const insertion = instantiateBranchStarterGraph(starter, {
+        anchorNodeId,
+        currentEdges: latestEdgesRef.current,
+        currentNodes: latestNodesRef.current,
+      })
+
+      if (!insertion) {
+        return null
+      }
+
+      const nextNodes = [
+        ...latestNodesRef.current.map((node) => {
+          const shouldExpand = node.id === anchorNodeId && node.data?.collapsed === true
+          const nextSelected = node.id === insertion.rootNodeId
+
+          if (!shouldExpand && Boolean(node.selected) === nextSelected) {
+            return node
+          }
+
+          return {
+            ...node,
+            data: shouldExpand
+              ? {
+                  ...node.data,
+                  collapsed: false,
+                }
+              : node.data,
+            selected: nextSelected,
+          }
+        }),
+        ...insertion.nodes.map((node) => ({
+          ...node,
+          selected: node.id === insertion.rootNodeId,
+        })),
+      ]
+      const nextEdges = [
+        ...latestEdgesRef.current.map((edge) =>
+          edge.selected
+            ? {
+                ...edge,
+                selected: false,
+              }
+            : edge
+        ),
+        ...insertion.edges,
+      ]
+
+      setNodes(nextNodes)
+      setEdges(nextEdges)
+      setSelectedNodeId(insertion.rootNodeId)
+      setSelectedEdgeId(null)
+      selectedNodeIdRef.current = insertion.rootNodeId
+      selectedEdgeIdRef.current = null
+      clearSelectionInvalidationNotice()
+      queuePersist(nextNodes, nextEdges)
+
+      return insertion.rootNodeId
+    },
+    [canEdit, clearSelectionInvalidationNotice, queuePersist]
+  )
+
   const retryLoad = useCallback(() => {
     void graphQuery.refetch()
   }, [graphQuery])
@@ -1862,6 +1932,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     hasRemoteUpdateAvailable,
     hasSelection,
     isLoading: graphQuery.isLoading,
+    insertBranchStarter,
     lastEdited,
     loadError: graphQuery.error instanceof Error ? graphQuery.error.message : null,
     nodes,

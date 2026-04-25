@@ -1,8 +1,10 @@
 import { supabase } from "@/lib/supabase"
 
+import { saveMapEditorGraphById } from "@/features/map-editor/api/map-editor-api"
 import {
   type AccessibleMap,
   type CreateMapPayload,
+  type CreateSeededMapPayload,
   type JoinMapOutcome,
   type JoinMapPayload,
   JoinMapFlowError,
@@ -28,6 +30,11 @@ type UpdatedMapDetailsRecord = {
   id: string
   last_edited: string | null
   name: string | null
+}
+
+type ProfileRecord = {
+  id: string
+  username: string | null
 }
 
 export type MapHeader = {
@@ -91,8 +98,8 @@ export async function fetchAccessibleMaps(userId: string): Promise<AccessibleMap
 
   const rows = (data ?? []) as MapParticipantRow[]
 
-  return rows
-    .map((row) => {
+  const accessibleMaps: AccessibleMap[] = rows
+    .map((row): AccessibleMap | null => {
       if (!row.map) {
         return null
       }
@@ -107,11 +114,43 @@ export async function fetchAccessibleMaps(userId: string): Promise<AccessibleMap
         id: embeddedMap.id,
         lastEdited: embeddedMap.last_edited,
         name: embeddedMap.name?.trim() || "Untitled",
+        ownerName: null,
         ownerId: embeddedMap.owner_id,
         role: row.role ?? "viewer",
       } satisfies AccessibleMap
     })
-    .filter((map): map is AccessibleMap => Boolean(map))
+    .filter((map): map is AccessibleMap => map !== null)
+
+  const ownerIds = Array.from(
+    new Set(
+      accessibleMaps
+        .map((map) => map.ownerId)
+        .filter((ownerId): ownerId is string => Boolean(ownerId))
+    )
+  )
+  const ownerNamesById = new Map<string, string>()
+
+  if (ownerIds.length > 0) {
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("id,username")
+      .in("id", ownerIds)
+
+    if (!profileError) {
+      for (const profile of (profileData ?? []) as ProfileRecord[]) {
+        const normalizedName = profile.username?.trim()
+        if (normalizedName) {
+          ownerNamesById.set(profile.id, normalizedName)
+        }
+      }
+    }
+  }
+
+  return accessibleMaps
+    .map((map) => ({
+      ...map,
+      ownerName: map.ownerId ? ownerNamesById.get(map.ownerId) ?? null : null,
+    }))
     .sort(sortByLastEditedDesc)
 }
 
@@ -133,6 +172,29 @@ export async function createMap(payload: CreateMapPayload): Promise<string> {
   }
 
   return data
+}
+
+export async function createMapWithSeed(
+  payload: CreateSeededMapPayload
+): Promise<string> {
+  const nextMapId = await createMap({
+    description: payload.description,
+    name: payload.name,
+  })
+
+  try {
+    await saveMapEditorGraphById(nextMapId, payload.nodes, payload.edges)
+  } catch (error) {
+    await supabase.from("maps").delete().eq("id", nextMapId)
+
+    throw new Error(
+      error instanceof Error
+        ? `Map setup could not be completed. ${error.message}`
+        : "Map setup could not be completed."
+    )
+  }
+
+  return nextMapId
 }
 
 export async function updateMapDetails(

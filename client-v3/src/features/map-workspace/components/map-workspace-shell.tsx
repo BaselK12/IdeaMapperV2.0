@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleDot,
   Clipboard,
+  Copy,
   Download,
   FileJson,
   FileText,
@@ -32,12 +33,14 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { getBuiltInBranchStarters } from "@/features/maps/api/map-presets"
 import {
   MapDetailsModal,
   type MapDetailsFormValues,
 } from "@/features/maps/components/map-details-modal"
 import { ModalFrame } from "@/features/maps/components/modal-frame"
 import {
+  useCreateSeededMapMutation,
   useDeleteMapMutation,
   useUpdateMapDetailsMutation,
 } from "@/features/maps/hooks/use-maps"
@@ -63,10 +66,16 @@ import {
 } from "@/features/map-editor/utils/map-editor-graph"
 import { MapWorkspaceParticipantStrip } from "@/features/map-workspace/components/map-workspace-participant-strip"
 import {
+  removeMapParticipant,
+  updateMapParticipantRole,
+} from "@/features/map-workspace/api/map-workspace-presence-api"
+import {
   useMapWorkspaceLiveCursors,
   type MapWorkspaceRealtimeStatus,
 } from "@/features/map-workspace/hooks/use-map-workspace-live-cursors"
+import { useMapNodeComments } from "@/features/map-workspace/hooks/use-map-node-comments"
 import { useMapWorkspacePresence } from "@/features/map-workspace/hooks/use-map-workspace-presence"
+import type { MapNodeCommentMention } from "@/features/map-workspace/types/map-node-comments-types"
 import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-types"
 import { cn } from "@/lib/utils"
 
@@ -86,7 +95,9 @@ type StatusPill = {
 }
 
 type WorkspaceDialog =
+  | "branch-starter"
   | "delete"
+  | "duplicate"
   | "export"
   | "map-details"
   | "more"
@@ -107,6 +118,7 @@ const warningStatusClassName =
   "border-[hsl(var(--warning-border))] bg-[hsl(var(--warning-soft))] text-[hsl(var(--warning-foreground))]"
 const neutralStatusClassName =
   "border-border/80 bg-card/95 text-muted-foreground"
+const builtInBranchStarters = getBuiltInBranchStarters()
 
 function formatRole(role: string) {
   if (role === "admin" || role === "editor" || role === "viewer") {
@@ -237,6 +249,55 @@ function formatOptionLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
+function normalizeOptionalText(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function getCurrentUserDisplayName(currentUser: User) {
+  const metadata = currentUser.user_metadata
+  const metadataName =
+    normalizeOptionalText(metadata?.full_name) ||
+    normalizeOptionalText(metadata?.name) ||
+    normalizeOptionalText(metadata?.username)
+
+  return metadataName || normalizeOptionalText(currentUser.email?.split("@")[0]) || "You"
+}
+
+function formatCommentTimestamp(value: string) {
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Just now"
+  }
+
+  return parsedDate.toLocaleString(undefined, {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+  })
+}
+
+function extractTrailingMentionQuery(value: string) {
+  const match = value.match(/(?:^|\s)@([^\s@]*)$/)
+  return match ? match[1].toLowerCase() : null
+}
+
+function insertTrailingMention(value: string, displayName: string) {
+  const nextDisplayName = displayName.trim()
+  if (!nextDisplayName) {
+    return value
+  }
+
+  if (/(?:^|\s)@[^\s@]*$/.test(value)) {
+    return value.replace(/(?:^|\s)@[^\s@]*$/, (match) => {
+      const prefix = match.startsWith(" ") ? " " : ""
+      return `${prefix}@${nextDisplayName} `
+    })
+  }
+
+  return value ? `${value} @${nextDisplayName} ` : `@${nextDisplayName} `
+}
+
 function isMediaType(value: string): value is MapEditorNodeMediaType {
   return value === "image" || value === "link" || value === "video"
 }
@@ -355,6 +416,8 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const toastIdRef = useRef(0)
   const toastTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [commentDraft, setCommentDraft] = useState("")
+  const [commentError, setCommentError] = useState<string | null>(null)
   const [focusRequest, setFocusRequest] = useState<MapEditorCanvasFocusRequest | null>(
     null
   )
@@ -362,11 +425,22 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const [isFocusMode, setIsFocusMode] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [shareFeedback, setShareFeedback] = useState<string | null>(null)
+  const [shareMemberError, setShareMemberError] = useState<string | null>(null)
   const [exportFeedback, setExportFeedback] = useState<string | null>(null)
   const [detailsError, setDetailsError] = useState<string | null>(null)
+  const [starterError, setStarterError] = useState<string | null>(null)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [pendingRoleUserId, setPendingRoleUserId] = useState<string | null>(null)
+  const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null)
   const [toasts, setToasts] = useState<WorkspaceToast[]>([])
   const editor = useMapEditor({ mapId: map.id, role: map.role })
+  const currentUserDisplayName = useMemo(
+    () => getCurrentUserDisplayName(currentUser),
+    [currentUser]
+  )
+  const nodeComments = useMapNodeComments({ mapId: map.id })
+  const duplicateMapMutation = useCreateSeededMapMutation(currentUser.id)
   const updateMapDetailsMutation = useUpdateMapDetailsMutation(currentUser.id)
   const deleteMapMutation = useDeleteMapMutation(currentUser.id)
   const mapPresence = useMapWorkspacePresence({
@@ -386,9 +460,35 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const cursorPill = liveCursorStatusPill(liveCursors.realtimeStatus)
   const mapLink = useMemo(() => getMapLink(map.id), [map.id])
   const canEditMapDetails = editor.canEdit
+  const canDuplicateMap = !editor.isLoading && !editor.loadError
+  const canManageMembers = map.role === "admin"
   const canDeleteMap = map.ownerId === currentUser.id
+  const selectedNodeTitle = editor.selectedNode?.title ?? ""
   const selectedNodeDescription = editor.selectedNode?.description ?? ""
   const selectedNodeMedia = editor.selectedNode?.media ?? null
+  const selectedNodeThread = editor.selectedNode
+    ? nodeComments.threads[editor.selectedNode.id] ?? null
+    : null
+  const selectedNodeComments = selectedNodeThread?.comments ?? []
+  const commentMentionQuery = useMemo(
+    () => extractTrailingMentionQuery(commentDraft),
+    [commentDraft]
+  )
+  const mentionSuggestions = useMemo(() => {
+    if (commentMentionQuery === null) {
+      return []
+    }
+
+    const normalizedQuery = commentMentionQuery.trim().toLowerCase()
+    return mapPresence.participants
+      .filter((participant) => !participant.isCurrentUser)
+      .filter((participant) =>
+        normalizedQuery
+          ? participant.displayName.toLowerCase().includes(normalizedQuery)
+          : true
+      )
+      .slice(0, 5)
+  }, [commentMentionQuery, mapPresence.participants])
   const hiddenNodeIds = useMemo(
     () => getCollapsedDescendantNodeIds(editor.nodes, editor.edges),
     [editor.edges, editor.nodes]
@@ -426,6 +526,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
       toastTimeoutsRef.current = []
     }
   }, [])
+
+  useEffect(() => {
+    setCommentDraft("")
+    setCommentError(null)
+  }, [editor.selectedNode?.id])
 
   const publishToast = useCallback(
     (message: string, tone: WorkspaceToast["tone"] = "success") => {
@@ -566,13 +671,20 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const closeDialog = () => {
-    if (updateMapDetailsMutation.isPending || deleteMapMutation.isPending) {
+    if (
+      duplicateMapMutation.isPending ||
+      updateMapDetailsMutation.isPending ||
+      deleteMapMutation.isPending
+    ) {
       return
     }
 
     setActiveDialog(null)
     setDetailsError(null)
+    setStarterError(null)
+    setDuplicateError(null)
     setDeleteError(null)
+    setShareMemberError(null)
   }
 
   const copyShareValue = async (value: string, successMessage: string) => {
@@ -749,6 +861,181 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     }
   }
 
+  const handleDuplicateMap = async (values: MapDetailsFormValues) => {
+    setDuplicateError(null)
+
+    try {
+      const duplicatedMapId = await duplicateMapMutation.mutateAsync({
+        description: values.description,
+        edges: editor.edges,
+        name: values.name,
+        nodes: editor.nodes,
+      })
+
+      setActiveDialog(null)
+      navigate(`/app/map/${duplicatedMapId}`)
+    } catch (error) {
+      setDuplicateError(
+        error instanceof Error ? error.message : "Failed to duplicate map."
+      )
+      publishToast("Map could not be duplicated.", "warning")
+    }
+  }
+
+  const handleInsertBranchStarter = (starterId: string) => {
+    if (!editor.selectedNode) {
+      setStarterError("Choose a node before inserting a starter branch.")
+      return
+    }
+
+    const starter =
+      builtInBranchStarters.find((entry) => entry.id === starterId) ?? null
+    if (!starter) {
+      setStarterError("The selected starter is no longer available.")
+      return
+    }
+
+    const anchorTitle = editor.selectedNode.title
+    const insertedRootNodeId = editor.insertBranchStarter(starter)
+
+    if (!insertedRootNodeId) {
+      setStarterError("Starter branch could not be inserted on this node.")
+      publishToast("Starter branch could not be inserted.", "warning")
+      return
+    }
+
+    setStarterError(null)
+    setActiveDialog(null)
+    setFocusRequest((currentFocusRequest) => ({
+      nodeId: insertedRootNodeId,
+      requestKey: (currentFocusRequest?.requestKey ?? 0) + 1,
+    }))
+    publishToast(`${starter.name} added to ${anchorTitle}.`)
+  }
+
+  const handleInsertMention = (displayName: string) => {
+    setCommentDraft((currentDraft) => insertTrailingMention(currentDraft, displayName))
+  }
+
+  const handleSubmitNodeComment = async () => {
+    if (!editor.selectedNode) {
+      setCommentError("Choose a node before adding a comment.")
+      return
+    }
+
+    const nextBody = commentDraft.trim()
+    if (!nextBody) {
+      setCommentError("Enter a comment before posting.")
+      return
+    }
+
+    setCommentError(null)
+
+    const normalizedBody = nextBody.toLowerCase()
+    const mentions: MapNodeCommentMention[] = mapPresence.participants
+      .filter((participant) => !participant.isCurrentUser)
+      .filter((participant) =>
+        normalizedBody.includes(`@${participant.displayName.toLowerCase()}`)
+      )
+      .map((participant) => ({
+        displayName: participant.displayName,
+        userId: participant.id,
+      }))
+
+    const didAddComment = await nodeComments.addComment({
+      authorId: currentUser.id,
+      authorName: currentUserDisplayName,
+      body: nextBody,
+      mentions,
+      nodeId: editor.selectedNode.id,
+    })
+
+    if (!didAddComment) {
+      setCommentError(
+        nodeComments.errorMessage ?? "Comment could not be added to this node."
+      )
+      publishToast("Node comment could not be added.", "warning")
+      return
+    }
+
+    setCommentDraft("")
+    publishToast("Node comment added.")
+  }
+
+  const handleToggleThreadResolved = async (isResolved: boolean) => {
+    if (!editor.selectedNode || selectedNodeComments.length === 0) {
+      return
+    }
+
+    setCommentError(null)
+
+    const didUpdateThread = await nodeComments.setThreadResolved({
+      actorId: currentUser.id,
+      actorName: currentUserDisplayName,
+      isResolved,
+      nodeId: editor.selectedNode.id,
+    })
+
+    if (!didUpdateThread) {
+      setCommentError(
+        nodeComments.errorMessage ?? "Comment thread status could not be updated."
+      )
+      publishToast("Comment thread status could not be updated.", "warning")
+      return
+    }
+
+    publishToast(isResolved ? "Comment thread resolved." : "Comment thread reopened.")
+  }
+
+  const handleParticipantRoleChange = async (
+    participantUserId: string,
+    nextRole: "admin" | "editor" | "viewer"
+  ) => {
+    setShareMemberError(null)
+    setPendingRoleUserId(participantUserId)
+
+    try {
+      await updateMapParticipantRole({
+        mapId: map.id,
+        role: nextRole,
+        userId: participantUserId,
+      })
+
+      mapPresence.refreshMembers()
+      setShareFeedback("Member role updated.")
+      publishToast("Member role updated.")
+    } catch (error) {
+      const nextError =
+        error instanceof Error ? error.message : "Member role could not be updated."
+      setShareMemberError(nextError)
+      publishToast("Member role could not be updated.", "warning")
+    } finally {
+      setPendingRoleUserId(null)
+    }
+  }
+
+  const handleRemoveMember = async (participantUserId: string) => {
+    setShareMemberError(null)
+    setPendingRemoveUserId(participantUserId)
+
+    try {
+      await removeMapParticipant({
+        mapId: map.id,
+        userId: participantUserId,
+      })
+
+      setShareFeedback("Member removed from the map.")
+      publishToast("Member removed from the map.")
+    } catch (error) {
+      const nextError =
+        error instanceof Error ? error.message : "Member could not be removed."
+      setShareMemberError(nextError)
+      publishToast("Member could not be removed.", "warning")
+    } finally {
+      setPendingRemoveUserId(null)
+    }
+  }
+
   const handleDeleteMap = async () => {
     setDeleteError(null)
 
@@ -801,6 +1088,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
               className="h-7 px-2 text-[11px]"
               onClick={() => {
                 setShareFeedback(null)
+                setShareMemberError(null)
                 setActiveDialog("share")
               }}
               size="sm"
@@ -1293,6 +1581,216 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   value={selectedNodeDescription}
                 />
               </div>
+              <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      Branch starters
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Attach a built-in branch structure to this selected node.
+                    </p>
+                  </div>
+                  <Button
+                    className="h-7 px-2.5 text-[11px]"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      setStarterError(null)
+                      setActiveDialog("branch-starter")
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <LayoutList className="size-3.5" />
+                    Insert
+                  </Button>
+                </div>
+                {isReadOnly ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Viewer access can read the map but cannot attach starter branches.
+                  </p>
+                ) : null}
+              </div>
+              <div className="rounded-xl border border-border/80 bg-background/70 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      Node comments
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Async discussion for this node only.
+                    </p>
+                  </div>
+                  {selectedNodeComments.length > 0 ? (
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                        selectedNodeThread?.isResolved
+                          ? successStatusClassName
+                          : infoStatusClassName
+                      )}
+                    >
+                      {selectedNodeThread?.isResolved ? "Resolved" : "Open"}
+                    </span>
+                  ) : null}
+                </div>
+
+                {nodeComments.isLoading ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Loading node comments...
+                  </p>
+                ) : selectedNodeComments.length > 0 ? (
+                  <div className="mt-3 space-y-2.5">
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {selectedNodeComments.map((comment) => (
+                        <div
+                          className="rounded-lg border border-border/80 bg-card/95 px-3 py-2.5"
+                          key={comment.id}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium text-foreground">
+                              {comment.authorName}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatCommentTimestamp(comment.createdAt)}
+                            </p>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                            {comment.body}
+                          </p>
+                          {comment.mentions.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {comment.mentions.map((mention) => (
+                                <span
+                                  className="rounded-full border border-primary/20 bg-primary-soft/35 px-2 py-0.5 text-[10px] font-medium text-primary"
+                                  key={`${comment.id}-${mention.userId}`}
+                                >
+                                  @{mention.displayName}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedNodeThread?.isResolved ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Resolved by{" "}
+                        <span className="font-medium text-foreground">
+                          {selectedNodeThread.resolvedByName || "a collaborator"}
+                        </span>{" "}
+                        {selectedNodeThread.resolvedAt
+                          ? `on ${formatCommentTimestamp(selectedNodeThread.resolvedAt)}`
+                          : ""}
+                        .
+                      </p>
+                    ) : null}
+
+                    {!isReadOnly ? (
+                      <div className="flex justify-end">
+                        <Button
+                          className="h-7 px-2.5 text-[11px]"
+                          disabled={nodeComments.isSaving}
+                          onClick={() => {
+                            void handleToggleThreadResolved(
+                              !(selectedNodeThread?.isResolved ?? false)
+                            )
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          {nodeComments.isSaving
+                            ? "Working..."
+                            : selectedNodeThread?.isResolved
+                              ? "Reopen thread"
+                              : "Resolve thread"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    No comments yet. Add one to keep discussion attached to this node.
+                  </p>
+                )}
+
+                {nodeComments.errorMessage || commentError ? (
+                  <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                    <p className="text-sm text-destructive">
+                      {commentError ?? nodeComments.errorMessage}
+                    </p>
+                    {nodeComments.errorMessage ? (
+                      <Button
+                        className="mt-2 h-7 px-2.5 text-[11px]"
+                        onClick={nodeComments.retryLoad}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Retry comments
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 space-y-2">
+                  <textarea
+                    className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isReadOnly || nodeComments.isSaving}
+                    maxLength={600}
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    placeholder={
+                      isReadOnly
+                        ? "Viewer access can read comments but cannot add new ones."
+                        : "Add context, a decision, or a follow-up. Type @ to mention a collaborator."
+                    }
+                    value={commentDraft}
+                  />
+
+                  {commentMentionQuery !== null ? (
+                    mentionSuggestions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {mentionSuggestions.map((participant) => (
+                          <button
+                            className="rounded-full border border-border/80 bg-card px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-primary-soft/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            key={participant.id}
+                            onClick={() => handleInsertMention(participant.displayName)}
+                            type="button"
+                          >
+                            @{participant.displayName}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        No collaborator matches that mention.
+                      </p>
+                    )
+                  ) : null}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      {isReadOnly
+                        ? "Comments stay readable in view-only mode."
+                        : "Comment changes are durable and visible to collaborators in this map."}
+                    </p>
+                    <Button
+                      className="h-8 px-3 text-xs"
+                      disabled={isReadOnly || nodeComments.isSaving || !commentDraft.trim()}
+                      onClick={() => {
+                        void handleSubmitNodeComment()
+                      }}
+                      size="sm"
+                      type="button"
+                    >
+                      {nodeComments.isSaving ? "Posting..." : "Post comment"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
               <details className="group rounded-xl border border-border/80 bg-background/70">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
                   <span>Advanced details</span>
@@ -1538,6 +2036,20 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         title="Share map"
       >
         <div className="space-y-5">
+          <div className="rounded-xl border border-border/80 bg-background/80 px-3 py-3">
+            <p className="text-sm font-medium text-foreground">Sharing flow</p>
+            <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+              <p>
+                1. Share the map link or invite code with someone who already has
+                Branchly access.
+              </p>
+              <p>
+                2. They join from the dashboard, then appear here so admins can
+                adjust access if needed.
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-2.5">
             <label className="text-sm font-medium text-foreground" htmlFor="share-map-link">
               Map link
@@ -1582,10 +2094,189 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             </p>
           </div>
 
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Members</p>
+                <p className="text-xs text-muted-foreground">
+                  {canManageMembers
+                    ? "Admins can update roles or remove members here."
+                    : "Admins can manage roles and members from this panel."}
+                </p>
+              </div>
+              <span className="rounded-full border border-border/80 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {mapPresence.participants.length} members
+              </span>
+            </div>
+
+            {mapPresence.isLoading ? (
+              <p className="rounded-xl border border-border/80 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                Loading members...
+              </p>
+            ) : mapPresence.errorMessage ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-3">
+                <p className="text-sm text-destructive">{mapPresence.errorMessage}</p>
+                <Button
+                  className="mt-2 h-7 px-2.5 text-[11px]"
+                  onClick={mapPresence.retry}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Retry members
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {mapPresence.participants.map((participant) => {
+                  const isOwner = participant.id === map.ownerId
+                  const isProtectedMember = isOwner || participant.isCurrentUser
+                  const isRolePending = pendingRoleUserId === participant.id
+                  const isRemovalPending = pendingRemoveUserId === participant.id
+
+                  return (
+                    <div
+                      className="rounded-xl border border-border/80 bg-card/95 px-3 py-3"
+                      key={participant.id}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">
+                              {participant.displayName}
+                            </p>
+                            {participant.isCurrentUser ? (
+                              <span className="rounded-full border border-border/80 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                You
+                              </span>
+                            ) : null}
+                            {isOwner ? (
+                              <span className="rounded-full border border-primary/20 bg-primary-soft/30 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                Owner
+                              </span>
+                            ) : null}
+                            <span
+                              className={cn(
+                                "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                roleClassName(participant.role)
+                              )}
+                            >
+                              {formatRole(participant.role)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {participant.presence === "online"
+                              ? "Online now"
+                              : participant.presence === "offline"
+                                ? "Offline"
+                                : "Presence unavailable"}
+                          </p>
+                        </div>
+
+                        {canManageMembers ? (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            {isOwner ? (
+                              <span className="text-xs text-muted-foreground">
+                                Owner access stays Admin.
+                              </span>
+                            ) : (
+                              <select
+                                className="h-9 min-w-28 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={isProtectedMember || isRolePending || isRemovalPending}
+                                onChange={(event) => {
+                                  void handleParticipantRoleChange(
+                                    participant.id,
+                                    event.target.value as "admin" | "editor" | "viewer"
+                                  )
+                                }}
+                                value={participant.role}
+                              >
+                                <option value="viewer">Viewer</option>
+                                <option value="editor">Editor</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                            )}
+
+                            {!isProtectedMember ? (
+                              <Button
+                                className="h-9 px-3 text-xs"
+                                disabled={isRolePending || isRemovalPending}
+                                onClick={() => {
+                                  void handleRemoveMember(participant.id)
+                                }}
+                                type="button"
+                                variant="outline"
+                              >
+                                {isRemovalPending ? "Removing..." : "Remove"}
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {shareMemberError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {shareMemberError}
+            </p>
+          ) : null}
+
           {shareFeedback ? (
             <p className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] px-3 py-2 text-sm text-[hsl(var(--success-foreground))]">
               <CheckCircle2 className="size-4" />
               {shareFeedback}
+            </p>
+          ) : null}
+        </div>
+      </ModalFrame>
+
+      <ModalFrame
+        description={
+          selectedNodeTitle
+            ? `Attach a built-in branch to ${selectedNodeTitle}. The new branch stays separate from the original starter preset.`
+            : "Attach a built-in branch starter to the selected node."
+        }
+        onClose={closeDialog}
+        open={activeDialog === "branch-starter"}
+        title="Insert branch starter"
+      >
+        <div className="space-y-4">
+          <div className="grid gap-2">
+            {builtInBranchStarters.map((starter) => (
+              <button
+                className="rounded-xl border border-border/80 bg-card/95 px-3 py-3 text-left transition-colors hover:bg-primary-soft/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                key={starter.id}
+                onClick={() => handleInsertBranchStarter(starter.id)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {starter.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {starter.summary}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-border/80 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {starter.graph.nodes.length} nodes
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {starter.description}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          {starterError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {starterError}
             </p>
           ) : null}
         </div>
@@ -1676,8 +2367,28 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
 
           <Button
             className="w-full justify-start"
+            disabled={!canDuplicateMap}
+            onClick={() => {
+              setDuplicateError(null)
+              setActiveDialog("duplicate")
+            }}
+            type="button"
+            variant="outline"
+          >
+            <Copy className="size-4" />
+            Duplicate map
+          </Button>
+          {!canDuplicateMap ? (
+            <p className="text-xs text-muted-foreground">
+              Duplicate becomes available after the current map content loads.
+            </p>
+          ) : null}
+
+          <Button
+            className="w-full justify-start"
             onClick={() => {
               setShareFeedback(null)
+              setShareMemberError(null)
               setActiveDialog("share")
             }}
             type="button"
@@ -1765,6 +2476,21 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           onSubmit={handleUpdateMapDetails}
           open
           title="Edit map details"
+        />
+      ) : null}
+      {activeDialog === "duplicate" ? (
+        <MapDetailsModal
+          description="Create a separate copy of this map. Nodes, layout, and connection details are copied; participants and sharing are not."
+          errorMessage={duplicateError}
+          initialDescription={map.description}
+          initialName={`${map.name} (Copy)`}
+          isSubmitting={duplicateMapMutation.isPending}
+          onClose={closeDialog}
+          onSubmit={handleDuplicateMap}
+          open
+          submittingLabel="Duplicating..."
+          submitLabel="Create copy"
+          title="Duplicate map"
         />
       ) : null}
 

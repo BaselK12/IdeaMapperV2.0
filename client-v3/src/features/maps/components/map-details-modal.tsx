@@ -19,6 +19,7 @@ type MapDetailsModalProps = {
   onClose: () => void
   onSubmit: (values: MapDetailsFormValues) => Promise<void>
   open: boolean
+  submittingLabel?: string
   submitLabel?: string
   title: string
 }
@@ -32,6 +33,7 @@ export function MapDetailsModal({
   onClose,
   onSubmit,
   open,
+  submittingLabel = "Saving...",
   submitLabel = "Save changes",
   title,
 }: MapDetailsModalProps) {
@@ -118,7 +120,7 @@ export function MapDetailsModal({
             Cancel
           </Button>
           <Button disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Saving..." : submitLabel}
+            {isSubmitting ? submittingLabel : submitLabel}
           </Button>
         </div>
       </form>

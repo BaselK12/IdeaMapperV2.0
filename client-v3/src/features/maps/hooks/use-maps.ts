@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
   createMap,
+  createMapWithSeed,
   deleteMapById,
   fetchAccessibleMaps,
   fetchMapHeaderById,
@@ -11,6 +12,7 @@ import {
 } from "@/features/maps/api/maps-api"
 import type {
   CreateMapPayload,
+  CreateSeededMapPayload,
   JoinMapOutcome,
   JoinMapPayload,
   UpdateMapDetailsPayload,
@@ -33,6 +35,23 @@ export function useCreateMapMutation(userId: string | undefined) {
 
   return useMutation({
     mutationFn: async (payload: CreateMapPayload) => createMap(payload),
+    onSuccess: async () => {
+      if (!userId) {
+        return
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: mapsListQueryKey(userId),
+      })
+    },
+  })
+}
+
+export function useCreateSeededMapMutation(userId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (payload: CreateSeededMapPayload) => createMapWithSeed(payload),
     onSuccess: async () => {
       if (!userId) {
         return

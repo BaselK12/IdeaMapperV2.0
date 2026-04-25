@@ -1,4 +1,12 @@
-import { ArrowRight, Clock3, LogOut, Map, PencilLine, Trash2 } from "lucide-react"
+import {
+  ArrowRight,
+  Clock3,
+  LogOut,
+  Map,
+  PencilLine,
+  Pin,
+  Trash2,
+} from "lucide-react"
 
 import type { AccessibleMap } from "@/features/maps/types/maps-types"
 import { cn } from "@/lib/utils"
@@ -9,6 +17,8 @@ type MapsListProps = {
   onEditMap: (map: AccessibleMap) => void
   onOpenMap: (mapId: string) => void
   onRemoveMap: (map: AccessibleMap) => void
+  onTogglePin: (mapId: string) => void
+  pinnedMapIds: Set<string>
 }
 
 function formatRole(role: string) {
@@ -41,13 +51,13 @@ function getLastEditedLabel(lastEdited: string | null) {
     return "Not edited yet"
   }
 
-  const formattedDate = parsedDate.toLocaleDateString(undefined, {
+  return `Updated ${parsedDate.toLocaleString(undefined, {
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
     month: "short",
     year: "numeric",
-  })
-
-  return `Updated ${formattedDate}`
+  })}`
 }
 
 function canEditMapDetails(map: AccessibleMap) {
@@ -67,12 +77,26 @@ function fallbackDescription(map: AccessibleMap) {
   return "Add a description so collaborators know what this map is for."
 }
 
+function getOwnerContext(map: AccessibleMap, currentUserId: string | undefined) {
+  if (map.ownerId && currentUserId && map.ownerId === currentUserId) {
+    return "Owned by you"
+  }
+
+  if (map.ownerName) {
+    return `Shared by ${map.ownerName}`
+  }
+
+  return "Shared workspace"
+}
+
 export function MapsList({
   currentUserId,
   maps,
   onEditMap,
   onOpenMap,
   onRemoveMap,
+  onTogglePin,
+  pinnedMapIds,
 }: MapsListProps) {
   return (
     <div className="space-y-2">
@@ -80,11 +104,18 @@ export function MapsList({
         {maps.map((map) => {
           const description = fallbackDescription(map)
           const isOwner = Boolean(currentUserId && map.ownerId === currentUserId)
+          const isPinned = pinnedMapIds.has(map.id)
           const canManageDetails = canEditMapDetails(map)
+          const ownerContext = getOwnerContext(map, currentUserId)
 
           return (
             <li key={map.id}>
-              <div className="group flex w-full items-start gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary-soft/20 hover:shadow-sm md:items-center md:px-4 md:py-3.5">
+              <div
+                className={cn(
+                  "group flex w-full items-start gap-3 rounded-xl border bg-card px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary-soft/20 hover:shadow-sm md:items-center md:px-4 md:py-3.5",
+                  isPinned ? "border-primary/30 bg-primary-soft/10" : "border-border/70"
+                )}
+              >
                 <button
                   className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:items-center md:gap-4"
                   onClick={() => onOpenMap(map.id)}
@@ -101,6 +132,9 @@ export function MapsList({
                     <p className="line-clamp-1 text-sm text-muted-foreground">
                       {description}
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground/80">
+                      {ownerContext}
+                    </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/70">
                       <span
                         className={cn(
@@ -114,6 +148,12 @@ export function MapsList({
                         <Clock3 className="size-3" />
                         {getLastEditedLabel(map.lastEdited)}
                       </span>
+                      {isPinned ? (
+                        <span className="inline-flex items-center gap-1 text-primary">
+                          <Pin className="size-3" />
+                          Pinned
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -121,6 +161,20 @@ export function MapsList({
                 </button>
 
                 <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    aria-label={`${isPinned ? "Unpin" : "Pin"} ${map.name}`}
+                    className={cn(
+                      "inline-flex size-8 items-center justify-center rounded-full border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isPinned
+                        ? "text-primary hover:border-primary/20 hover:bg-primary-soft/30"
+                        : "text-muted-foreground hover:border-border/80 hover:bg-background hover:text-foreground"
+                    )}
+                    onClick={() => onTogglePin(map.id)}
+                    title={isPinned ? "Unpin map" : "Pin map"}
+                    type="button"
+                  >
+                    <Pin className="size-4" />
+                  </button>
                   {canManageDetails ? (
                     <button
                       aria-label={`Rename ${map.name}`}

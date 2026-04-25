@@ -46,6 +46,7 @@ type UseMapWorkspacePresenceResult = {
   isLoading: boolean
   isPresenceUnavailable: boolean
   participants: MapWorkspaceParticipant[]
+  refreshMembers: () => void
   retry: () => void
 }
 
@@ -502,11 +503,16 @@ export function useMapWorkspacePresence({
     void refreshRoster(sessionId, { showLoading: true })
   }, [refreshRoster])
 
+  const refreshMembers = useCallback(() => {
+    void refreshRoster(sessionRef.current)
+  }, [refreshRoster])
+
   return {
     errorMessage,
     isLoading,
     isPresenceUnavailable,
     participants,
+    refreshMembers,
     retry,
   }
 }

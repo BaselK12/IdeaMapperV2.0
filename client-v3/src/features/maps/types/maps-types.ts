@@ -1,3 +1,8 @@
+import type {
+  MapEditorEdge,
+  MapEditorNode,
+} from "@/features/map-editor/types/map-editor-types"
+
 export type MapParticipantRole = "viewer" | "editor" | "admin" | string
 
 export type AccessibleMap = {
@@ -5,6 +10,7 @@ export type AccessibleMap = {
   id: string
   lastEdited: string | null
   name: string
+  ownerName: string | null
   ownerId: string | null
   role: MapParticipantRole
 }
@@ -12,6 +18,35 @@ export type AccessibleMap = {
 export type CreateMapPayload = {
   description?: string
   name: string
+}
+
+export type CreateSeededMapPayload = CreateMapPayload & {
+  edges: MapEditorEdge[]
+  nodes: MapEditorNode[]
+}
+
+export type MapSeedGraph = {
+  edges: MapEditorEdge[]
+  nodes: MapEditorNode[]
+}
+
+export type BuiltInMapTemplate = {
+  description: string
+  graph: MapSeedGraph
+  id: string
+  name: string
+  suggestedDescription: string
+  suggestedName: string
+  summary: string
+}
+
+export type BuiltInBranchStarter = {
+  description: string
+  graph: MapSeedGraph
+  id: string
+  name: string
+  rootNodeId: string
+  summary: string
 }
 
 export type UpdateMapDetailsPayload = {

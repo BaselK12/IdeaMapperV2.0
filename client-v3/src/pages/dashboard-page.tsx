@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   AlertCircle,
+  Clock3,
   FileSearch,
   FolderKanban,
   LogOut,
+  Pin,
   Plus,
   Search,
   Trash2,
@@ -15,6 +17,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/features/auth/auth-context"
+import {
+  loadMapDashboardPreferences,
+  pruneMapDashboardPreferences,
+  recordRecentMapOpen,
+  saveMapDashboardPreferences,
+  type MapDashboardPreferences,
+} from "@/features/maps/api/map-dashboard-preferences"
+import {
+  getBuiltInMapTemplate,
+  instantiateMapTemplateGraph,
+} from "@/features/maps/api/map-presets"
 import {
   CreateMapModal,
   type CreateMapFormValues,
@@ -32,6 +45,7 @@ import { MapsList } from "@/features/maps/components/maps-list"
 import {
   useAccessibleMapsQuery,
   useCreateMapMutation,
+  useCreateSeededMapMutation,
   useDeleteMapMutation,
   useJoinMapMutation,
   useLeaveMapMutation,
@@ -41,6 +55,7 @@ import {
   type AccessibleMap,
   JoinMapFlowError,
 } from "@/features/maps/types/maps-types"
+import { cn } from "@/lib/utils"
 
 function LoadingRows() {
   return (
@@ -66,6 +81,27 @@ function LoadingRows() {
   )
 }
 
+function SectionLoadingGrid() {
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          className="animate-pulse rounded-2xl border border-border/70 bg-card/85 p-5"
+          key={index}
+        >
+          <div className="h-4 w-28 rounded bg-muted/80" />
+          <div className="mt-2 h-3 w-56 rounded bg-muted/70" />
+          <div className="mt-4 space-y-2">
+            <div className="h-14 rounded-xl bg-muted/70" />
+            <div className="h-14 rounded-xl bg-muted/70" />
+            <div className="h-14 rounded-xl bg-muted/70" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function isObviousTestMap(map: AccessibleMap) {
   const name = map.name.trim().toLowerCase()
   const description = map.description.trim().toLowerCase()
@@ -80,12 +116,192 @@ function isObviousTestMap(map: AccessibleMap) {
   )
 }
 
+function formatRole(role: string) {
+  if (role === "admin" || role === "editor" || role === "viewer") {
+    return role.charAt(0).toUpperCase() + role.slice(1)
+  }
+
+  return "Member"
+}
+
+function roleClassName(role: string) {
+  if (role === "admin") {
+    return "border-primary/25 bg-primary-soft text-primary"
+  }
+
+  if (role === "editor") {
+    return "border-[hsl(var(--info-border))] bg-[hsl(var(--info-soft))] text-[hsl(var(--info-foreground))]"
+  }
+
+  return "border-border/80 bg-muted/70 text-muted-foreground"
+}
+
+function getOwnerContext(map: AccessibleMap, currentUserId: string | undefined) {
+  if (map.ownerId && currentUserId && map.ownerId === currentUserId) {
+    return "Owned by you"
+  }
+
+  if (map.ownerName) {
+    return `Shared by ${map.ownerName}`
+  }
+
+  return "Shared workspace"
+}
+
+function getUpdatedSignal(lastEdited: string | null) {
+  if (!lastEdited) {
+    return "No edits yet"
+  }
+
+  const parsedDate = new Date(lastEdited)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "No edits yet"
+  }
+
+  const now = new Date()
+  const todayKey = now.toDateString()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  const mapDayKey = parsedDate.toDateString()
+
+  if (mapDayKey === todayKey) {
+    return `Updated today at ${parsedDate.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`
+  }
+
+  if (mapDayKey === yesterday.toDateString()) {
+    return `Updated yesterday at ${parsedDate.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`
+  }
+
+  return `Updated ${parsedDate.toLocaleString(undefined, {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  })}`
+}
+
+function sameIdOrder(firstIds: string[], secondIds: string[]) {
+  if (firstIds.length !== secondIds.length) {
+    return false
+  }
+
+  return firstIds.every((id, index) => secondIds[index] === id)
+}
+
+type DashboardMapSectionProps = {
+  currentUserId: string | undefined
+  description: string
+  emptyMessage: string
+  maps: AccessibleMap[]
+  onOpenMap: (mapId: string) => void
+  onTogglePin: (mapId: string) => void
+  pinnedMapIds: Set<string>
+  title: string
+}
+
+function DashboardMapSection({
+  currentUserId,
+  description,
+  emptyMessage,
+  maps,
+  onOpenMap,
+  onTogglePin,
+  pinnedMapIds,
+  title,
+}: DashboardMapSectionProps) {
+  return (
+    <Card className="border-border/70 bg-card/95 shadow-sm">
+      <CardHeader className="space-y-1 border-b border-border/70 pb-4">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className="p-4">
+        {maps.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/80 bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
+            {emptyMessage}
+          </div>
+        ) : (
+          <ul className="space-y-2" role="list">
+            {maps.map((map) => {
+              const isPinned = pinnedMapIds.has(map.id)
+
+              return (
+                <li key={map.id}>
+                  <div
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border px-3 py-3 transition-colors hover:border-primary/30 hover:bg-primary-soft/15",
+                      isPinned
+                        ? "border-primary/30 bg-primary-soft/10"
+                        : "border-border/70 bg-background/70"
+                    )}
+                  >
+                    <button
+                      className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      onClick={() => onOpenMap(map.id)}
+                      type="button"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {map.name}
+                        </p>
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                            roleClassName(map.role)
+                          )}
+                        >
+                          {formatRole(map.role)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground/85">
+                        {getOwnerContext(map, currentUserId)}
+                      </p>
+                      <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Clock3 className="size-3" />
+                        {getUpdatedSignal(map.lastEdited)}
+                      </p>
+                    </button>
+
+                    <button
+                      aria-label={`${isPinned ? "Unpin" : "Pin"} ${map.name}`}
+                      className={cn(
+                        "inline-flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        isPinned
+                          ? "border-primary/20 bg-primary-soft/30 text-primary hover:bg-primary-soft/45"
+                          : "border-transparent text-muted-foreground hover:border-border/80 hover:bg-background hover:text-foreground"
+                      )}
+                      onClick={() => onTogglePin(map.id)}
+                      title={isPinned ? "Unpin map" : "Pin map"}
+                      type="button"
+                    >
+                      <Pin className="size-4" />
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const userId = user?.id
 
   const [searchTerm, setSearchTerm] = useState("")
+  const [dashboardPreferences, setDashboardPreferences] =
+    useState<MapDashboardPreferences>(() => loadMapDashboardPreferences(userId))
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -100,6 +316,7 @@ export function DashboardPage() {
 
   const mapsQuery = useAccessibleMapsQuery(userId)
   const createMapMutation = useCreateMapMutation(userId)
+  const createSeededMapMutation = useCreateSeededMapMutation(userId)
   const joinMapMutation = useJoinMapMutation(userId)
   const updateMapDetailsMutation = useUpdateMapDetailsMutation(userId)
   const deleteMapMutation = useDeleteMapMutation(userId)
@@ -112,17 +329,83 @@ export function DashboardPage() {
   )
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
-  const filteredMaps = useMemo(() => {
-    const sourceMaps = accessibleMaps
+  useEffect(() => {
+    setDashboardPreferences(loadMapDashboardPreferences(userId))
+  }, [userId])
 
-    if (!normalizedSearchTerm) {
-      return sourceMaps
+  useEffect(() => {
+    if (!userId || maps === undefined) {
+      return
     }
 
-    return sourceMaps.filter((map) =>
+    const accessibleMapIds = accessibleMaps.map((map) => map.id)
+    const nextPreferences = pruneMapDashboardPreferences(
+      dashboardPreferences,
+      accessibleMapIds
+    )
+
+    if (
+      sameIdOrder(nextPreferences.pinnedMapIds, dashboardPreferences.pinnedMapIds) &&
+      sameIdOrder(nextPreferences.recentMapIds, dashboardPreferences.recentMapIds)
+    ) {
+      return
+    }
+
+    setDashboardPreferences(nextPreferences)
+    saveMapDashboardPreferences(userId, nextPreferences)
+  }, [accessibleMaps, dashboardPreferences, maps, userId])
+
+  const pinnedMapIds = useMemo(
+    () => new Set(dashboardPreferences.pinnedMapIds),
+    [dashboardPreferences.pinnedMapIds]
+  )
+  const mapsById = useMemo(
+    () => new Map(accessibleMaps.map((map) => [map.id, map])),
+    [accessibleMaps]
+  )
+
+  const filteredMaps = useMemo(() => {
+    if (!normalizedSearchTerm) {
+      return accessibleMaps
+    }
+
+    return accessibleMaps.filter((map) =>
       map.name.toLowerCase().includes(normalizedSearchTerm)
     )
   }, [accessibleMaps, normalizedSearchTerm])
+
+  const pinnedMaps = useMemo(
+    () =>
+      dashboardPreferences.pinnedMapIds
+        .map((mapId) => mapsById.get(mapId))
+        .filter((map): map is AccessibleMap => Boolean(map))
+        .slice(0, 4),
+    [dashboardPreferences.pinnedMapIds, mapsById]
+  )
+  const recentMaps = useMemo(
+    () =>
+      dashboardPreferences.recentMapIds
+        .map((mapId) => mapsById.get(mapId))
+        .filter((map): map is AccessibleMap => Boolean(map))
+        .slice(0, 4),
+    [dashboardPreferences.recentMapIds, mapsById]
+  )
+  const sharedWithMeMaps = useMemo(
+    () =>
+      accessibleMaps
+        .filter((map) => !userId || map.ownerId !== userId)
+        .slice(0, 4),
+    [accessibleMaps, userId]
+  )
+  const recentlyUpdatedMaps = useMemo(() => {
+    const recentAndPinnedIds = new Set([
+      ...dashboardPreferences.pinnedMapIds,
+      ...dashboardPreferences.recentMapIds,
+    ])
+
+    const sectionMaps = accessibleMaps.filter((map) => !recentAndPinnedIds.has(map.id))
+    return (sectionMaps.length > 0 ? sectionMaps : accessibleMaps).slice(0, 4)
+  }, [accessibleMaps, dashboardPreferences.pinnedMapIds, dashboardPreferences.recentMapIds])
 
   const hasNoMaps =
     !mapsQuery.isLoading &&
@@ -140,7 +423,7 @@ export function DashboardPage() {
   }
 
   const closeCreateModal = () => {
-    if (createMapMutation.isPending) {
+    if (createMapMutation.isPending || createSeededMapMutation.isPending) {
       return
     }
 
@@ -182,7 +465,27 @@ export function DashboardPage() {
     setSelectedMapForRemoval(null)
   }
 
+  const handleTogglePin = (mapId: string) => {
+    setDashboardPreferences((currentPreferences) => {
+      const isPinned = currentPreferences.pinnedMapIds.includes(mapId)
+      const nextPreferences = {
+        ...currentPreferences,
+        pinnedMapIds: isPinned
+          ? currentPreferences.pinnedMapIds.filter((id) => id !== mapId)
+          : [mapId, ...currentPreferences.pinnedMapIds.filter((id) => id !== mapId)],
+      } satisfies MapDashboardPreferences
+
+      saveMapDashboardPreferences(userId, nextPreferences)
+      return nextPreferences
+    })
+  }
+
   const handleOpenMap = (mapId: string) => {
+    const nextPreferences = recordRecentMapOpen(userId, mapId)
+    setDashboardPreferences((currentPreferences) => ({
+      pinnedMapIds: currentPreferences.pinnedMapIds,
+      recentMapIds: nextPreferences.recentMapIds,
+    }))
     navigate(`/app/map/${mapId}`)
   }
 
@@ -190,13 +493,28 @@ export function DashboardPage() {
     setCreateError(null)
 
     try {
-      const createdMapId = await createMapMutation.mutateAsync({
-        description: values.description,
-        name: values.name,
-      })
+      const createdMapId = values.templateId
+        ? await (async () => {
+            const template = getBuiltInMapTemplate(values.templateId ?? "")
+            if (!template) {
+              throw new Error("The selected template is no longer available.")
+            }
+
+            const graph = instantiateMapTemplateGraph(template)
+            return createSeededMapMutation.mutateAsync({
+              description: values.description,
+              edges: graph.edges,
+              name: values.name,
+              nodes: graph.nodes,
+            })
+          })()
+        : await createMapMutation.mutateAsync({
+            description: values.description,
+            name: values.name,
+          })
 
       setIsCreateModalOpen(false)
-      navigate(`/app/map/${createdMapId}`)
+      handleOpenMap(createdMapId)
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Failed to create map."
@@ -263,7 +581,7 @@ export function DashboardPage() {
       }
 
       setIsJoinModalOpen(false)
-      navigate(`/app/map/${values.mapId.trim()}`)
+      handleOpenMap(values.mapId.trim())
     } catch (error) {
       if (error instanceof JoinMapFlowError) {
         setJoinError(error.message)
@@ -299,18 +617,25 @@ export function DashboardPage() {
                 Dashboard
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-                Your maps
+                Pick up where you left off
               </h1>
               <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
-                Create a map, reopen a workspace, or join one shared with your
-                group.
+                Jump into recent, pinned, shared, and freshly updated maps without
+                digging through the full workspace list.
               </p>
             </div>
 
-            <div className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
-              {normalizedSearchTerm
-                ? `${filteredMaps.length} of ${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"}`
-                : `${accessibleMaps.length} ${accessibleMaps.length === 1 ? "map" : "maps"} in your workspace`}
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1">
+                {accessibleMaps.length} {accessibleMaps.length === 1 ? "map" : "maps"} in
+                your workspace
+              </span>
+              <span className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1">
+                {dashboardPreferences.pinnedMapIds.length} pinned
+              </span>
+              <span className="inline-flex items-center rounded-full border border-border/70 bg-background/80 px-3 py-1">
+                {sharedWithMeMaps.length} shared with you
+              </span>
             </div>
           </div>
 
@@ -326,6 +651,53 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {mapsQuery.isLoading ? <SectionLoadingGrid /> : null}
+
+      {!mapsQuery.isLoading && !mapsQuery.isError && !hasNoMaps ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <DashboardMapSection
+            currentUserId={userId}
+            description="Maps you opened most recently on this device."
+            emptyMessage="Open a map and it will appear here for faster return-to-work."
+            maps={recentMaps}
+            onOpenMap={handleOpenMap}
+            onTogglePin={handleTogglePin}
+            pinnedMapIds={pinnedMapIds}
+            title="Recent"
+          />
+          <DashboardMapSection
+            currentUserId={userId}
+            description="Keep important maps pinned for one-click return."
+            emptyMessage="Pin a map from any dashboard card or list row to keep it here."
+            maps={pinnedMaps}
+            onOpenMap={handleOpenMap}
+            onTogglePin={handleTogglePin}
+            pinnedMapIds={pinnedMapIds}
+            title="Pinned"
+          />
+          <DashboardMapSection
+            currentUserId={userId}
+            description="Maps owned by collaborators and shared into your workspace."
+            emptyMessage="When someone shares a map with you, it will show up here."
+            maps={sharedWithMeMaps}
+            onOpenMap={handleOpenMap}
+            onTogglePin={handleTogglePin}
+            pinnedMapIds={pinnedMapIds}
+            title="Shared with me"
+          />
+          <DashboardMapSection
+            currentUserId={userId}
+            description="Maps with the freshest edits across your workspace."
+            emptyMessage="Edits will surface here as your workspace changes."
+            maps={recentlyUpdatedMaps}
+            onOpenMap={handleOpenMap}
+            onTogglePin={handleTogglePin}
+            pinnedMapIds={pinnedMapIds}
+            title="Recently updated"
+          />
+        </div>
+      ) : null}
 
       <Card className="animate-fade-up border-border/70 bg-card/95 shadow-md">
         <CardHeader className="flex flex-col gap-4 border-b border-border/70 pb-5 lg:flex-row lg:items-end lg:justify-between">
@@ -436,6 +808,8 @@ export function DashboardPage() {
                 setRemovalError(null)
                 setSelectedMapForRemoval(map)
               }}
+              onTogglePin={handleTogglePin}
+              pinnedMapIds={pinnedMapIds}
             />
           ) : null}
         </CardContent>
@@ -443,7 +817,9 @@ export function DashboardPage() {
 
       <CreateMapModal
         errorMessage={createError}
-        isSubmitting={createMapMutation.isPending}
+        isSubmitting={
+          createMapMutation.isPending || createSeededMapMutation.isPending
+        }
         key={isCreateModalOpen ? "create-open" : "create-closed"}
         onClose={closeCreateModal}
         onSubmit={handleCreateMap}

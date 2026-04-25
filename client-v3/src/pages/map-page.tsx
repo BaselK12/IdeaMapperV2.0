@@ -1,7 +1,9 @@
+import { useEffect } from "react"
 import { useParams } from "react-router-dom"
 
 import { ErrorBoundary } from "@/components/error-boundary"
 import { useAuth } from "@/features/auth/auth-context"
+import { recordRecentMapOpen } from "@/features/maps/api/map-dashboard-preferences"
 import { isValidMapId } from "@/features/map-workspace/api/map-workspace-api"
 import { MapWorkspaceLoading } from "@/features/map-workspace/components/map-workspace-loading"
 import { MapWorkspaceShell } from "@/features/map-workspace/components/map-workspace-shell"
@@ -17,6 +19,14 @@ export function MapPage() {
   const hasValidMapId = Boolean(normalizedMapId) && isValidMapId(normalizedMapId)
 
   const mapWorkspaceQuery = useMapWorkspaceQuery(normalizedMapId, user?.id)
+
+  useEffect(() => {
+    if (!user?.id || !mapWorkspaceQuery.data?.id) {
+      return
+    }
+
+    recordRecentMapOpen(user.id, normalizedMapId)
+  }, [mapWorkspaceQuery.data?.id, normalizedMapId, user?.id])
 
   // ── 1. Auth loading ───────────────────────────────────────────────────────
   // ProtectedRoute already gates on isLoading, so this is always false when
