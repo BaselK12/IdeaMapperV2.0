@@ -19,7 +19,9 @@ import {
   Layers,
   LayoutList,
   Link2,
+  Loader2,
   Mail,
+  Sparkles,
   MoreHorizontal,
   Network,
   Palette,
@@ -109,6 +111,9 @@ import type { MapWorkspace } from "@/features/map-workspace/types/map-workspace-
 import { useMapInvites } from "@/features/map-workspace/hooks/use-map-invites"
 import type { MapInviteRole } from "@/features/map-workspace/types/map-invites-types"
 import { createNotificationForUser } from "@/features/notifications/api/notifications-api"
+import { generateAiBranch, AI_BRANCH_MODES } from "@/lib/ai-branch-gen"
+import type { AiBranchMode } from "@/lib/ai-branch-gen"
+import type { BuiltInBranchStarter } from "@/features/maps/types/maps-types"
 import { cn } from "@/lib/utils"
 
 type MapWorkspaceShellProps = {
@@ -131,6 +136,7 @@ type StatusPill = {
 }
 
 type WorkspaceDialog =
+  | "ai-branch"
   | "branch-starter"
   | "delete"
   | "duplicate"
@@ -704,6 +710,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<MapInviteRole>("viewer")
   const [lastInviteToken, setLastInviteToken] = useState<string | null>(null)
+  const [aiBranchMode, setAiBranchMode] = useState<AiBranchMode>("brainstorm")
+  const [aiBranchInstruction, setAiBranchInstruction] = useState("")
+  const [aiBranchResult, setAiBranchResult] = useState<BuiltInBranchStarter | null>(null)
+  const [isAiBranchGenerating, setIsAiBranchGenerating] = useState(false)
+  const [aiBranchError, setAiBranchError] = useState<string | null>(null)
   const canvasViewportRef = useRef<MapEditorCanvasViewportHandle | null>(null)
   const navigatorSearchRef = useRef<HTMLInputElement | null>(null)
   const editor = useMapEditor({ mapId: map.id, role: map.role })
@@ -1057,6 +1068,10 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     setShareMemberError(null)
     setInviteEmail("")
     setLastInviteToken(null)
+    setAiBranchInstruction("")
+    setAiBranchResult(null)
+    setIsAiBranchGenerating(false)
+    setAiBranchError(null)
   }
 
   const handleCreateInvite = async () => {
@@ -1068,6 +1083,54 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
       setInviteEmail("")
       setLastInviteToken(invite.token)
     }
+  }
+
+  const handleOpenAiBranch = () => {
+    setAiBranchError(null)
+    setAiBranchResult(null)
+    setActiveDialog("ai-branch")
+  }
+
+  const handleGenerateAiBranch = async () => {
+    if (!editor.selectedNode) return
+    setAiBranchError(null)
+    setAiBranchResult(null)
+    setIsAiBranchGenerating(true)
+    try {
+      const result = await generateAiBranch({
+        instruction: aiBranchInstruction,
+        mode: aiBranchMode,
+        nodeDescription: editor.selectedNode.description ?? "",
+        nodeTitle: editor.selectedNode.title,
+      })
+      setAiBranchResult(result)
+    } catch (error) {
+      setAiBranchError(
+        error instanceof Error ? error.message : "AI generation failed. Try again."
+      )
+    } finally {
+      setIsAiBranchGenerating(false)
+    }
+  }
+
+  const handleInsertAiBranch = () => {
+    if (!aiBranchResult || !editor.selectedNode) {
+      setAiBranchError("Select a node and generate a branch first.")
+      return
+    }
+    const anchorTitle = editor.selectedNode.title
+    const insertedRootNodeId = editor.insertBranchStarter(aiBranchResult)
+    if (!insertedRootNodeId) {
+      setAiBranchError("Branch could not be inserted. Try generating again.")
+      publishToast("AI branch could not be inserted.", "warning")
+      return
+    }
+    setFocusRequest((currentFocusRequest) => ({
+      nodeId: insertedRootNodeId,
+      requestKey: (currentFocusRequest?.requestKey ?? 0) + 1,
+    }))
+    publishToast(`AI ${aiBranchMode} branch added to "${anchorTitle}".`)
+    closeDialog()
   }
 
   const handleSaveCurrentView = () => {
@@ -2357,6 +2420,34 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                   </p>
                 ) : null}
               </div>
+              <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      AI branch
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Generate a structured subtree from this node using AI.
+                    </p>
+                  </div>
+                  <Button
+                    className="h-7 px-2.5 text-[11px]"
+                    disabled={isReadOnly}
+                    onClick={handleOpenAiBranch}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Sparkles className="size-3.5" />
+                    Generate
+                  </Button>
+                </div>
+                {isReadOnly ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Viewer access cannot generate AI branches.
+                  </p>
+                ) : null}
+              </div>
               <div className="rounded-xl border border-border/80 bg-background/70 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -3133,6 +3224,135 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           {starterError ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {starterError}
+            </p>
+          ) : null}
+        </div>
+      </ModalFrame>
+
+      <ModalFrame
+        description={
+          editor.selectedNode
+            ? `Generating branch for: ${editor.selectedNode.title}`
+            : "Select a node to generate a branch."
+        }
+        onClose={closeDialog}
+        open={activeDialog === "ai-branch"}
+        title="AI branch"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">Mode</p>
+            <div className="flex flex-wrap gap-2">
+              {AI_BRANCH_MODES.map((m) => (
+                <button
+                  className={cn(
+                    "rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    aiBranchMode === m.id
+                      ? "border-primary/30 bg-primary text-primary-foreground"
+                      : "border-border/80 bg-background/80 text-foreground/80 hover:bg-primary-soft hover:text-foreground"
+                  )}
+                  disabled={isAiBranchGenerating}
+                  key={m.id}
+                  onClick={() => {
+                    setAiBranchMode(m.id)
+                    setAiBranchResult(null)
+                    setAiBranchError(null)
+                  }}
+                  type="button"
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="ai-branch-instruction">
+              Extra instruction{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <Input
+              disabled={isAiBranchGenerating}
+              id="ai-branch-instruction"
+              maxLength={200}
+              onChange={(event) => {
+                setAiBranchInstruction(event.target.value)
+                setAiBranchResult(null)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !isAiBranchGenerating && !aiBranchResult) {
+                  void handleGenerateAiBranch()
+                }
+              }}
+              placeholder="e.g. focus on the technical side"
+              value={aiBranchInstruction}
+            />
+          </div>
+
+          {!aiBranchResult ? (
+            <Button
+              className="w-full"
+              disabled={isAiBranchGenerating || !editor.selectedNode}
+              onClick={() => { void handleGenerateAiBranch() }}
+              type="button"
+            >
+              {isAiBranchGenerating ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 size-4" />
+                  Generate branch
+                </>
+              )}
+            </Button>
+          ) : null}
+
+          {aiBranchResult ? (
+            <div className="rounded-xl border border-[hsl(var(--success-border))] bg-[hsl(var(--success-soft))] p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-[hsl(var(--success-foreground))]">
+                    Ready to insert
+                  </p>
+                  <p className="text-xs text-[hsl(var(--success-foreground))]/80">
+                    {aiBranchResult.graph.nodes.length} nodes generated. Review then insert.
+                  </p>
+                </div>
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-[hsl(var(--success-foreground))]" />
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={handleInsertAiBranch}
+                  type="button"
+                >
+                  Insert branch
+                </Button>
+                <Button
+                  disabled={isAiBranchGenerating}
+                  onClick={() => {
+                    setAiBranchResult(null)
+                    void handleGenerateAiBranch()
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  {isAiBranchGenerating ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    "Retry"
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {aiBranchError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {aiBranchError}
             </p>
           ) : null}
         </div>
