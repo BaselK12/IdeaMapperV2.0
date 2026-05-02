@@ -1,6 +1,58 @@
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
 
+// ─── Rate limiting ─────────────────────────────────────────────────────────────
+// In-memory rolling-window rate limiter keyed by authenticated user ID.
+//
+// Limit: 20 AI branch generations per user per 60-minute rolling window.
+//
+// LIMITATION: this store is per function instance. Supabase may run multiple
+// edge runtime instances in parallel, so a user hitting different instances
+// will see separate counters. In practice this provides meaningful protection
+// against runaway single-client usage while requiring zero database migrations.
+// Upgrade path: replace with a Supabase DB table if global consistency is needed.
+const rateLimitBuckets = new Map<string, number[]>()
+
+const RATE_WINDOW_MS = 60 * 60 * 1000 // 1 hour
+const RATE_LIMIT_MAX = 20              // requests per window per user
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now()
+  const cutoff = now - RATE_WINDOW_MS
+
+  const prev = rateLimitBuckets.get(userId) ?? []
+  const recent = prev.filter((ts) => ts > cutoff)
+
+  if (recent.length >= RATE_LIMIT_MAX) {
+    rateLimitBuckets.set(userId, recent) // keep cleaned-up list
+    return true
+  }
+
+  recent.push(now)
+  rateLimitBuckets.set(userId, recent)
+  return false
+}
+
+// Extract the authenticated Supabase user ID from the JWT Bearer token.
+// Supabase edge runtime has already verified the JWT signature before this runs.
+function getUserId(req: Request): string | null {
+  const authHeader = req.headers.get("authorization") ?? ""
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim()
+  if (!token) return null
+
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3) return null
+    // base64url → base64 → JSON
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const payload = JSON.parse(atob(padded)) as Record<string, unknown>
+    return typeof payload.sub === "string" ? payload.sub : null
+  } catch {
+    return null
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Origin": "*",
@@ -100,6 +152,23 @@ Deno.serve(async (req: Request) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       )
     }
+
+    // ── Rate limit check (before touching Groq) ──────────────────────────────
+    const userId = getUserId(req)
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
+      )
+    }
+
+    if (isRateLimited(userId)) {
+      return new Response(
+        JSON.stringify({ error: "AI generation limit reached. Try again in an hour." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 429 }
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const model = Deno.env.get("GROQ_MODEL") ?? DEFAULT_GROQ_MODEL
 

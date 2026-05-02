@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import {
+  AlignLeft,
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
@@ -114,6 +115,8 @@ import { createNotificationForUser } from "@/features/notifications/api/notifica
 import { generateAiBranch, AI_BRANCH_MODES } from "@/lib/ai-branch-gen"
 import type { AiBranchMode } from "@/lib/ai-branch-gen"
 import type { BuiltInBranchStarter } from "@/features/maps/types/maps-types"
+import { generateAiSummary, collectBranchSubgraph } from "@/lib/ai-map-summary"
+import type { AiMapSummary } from "@/lib/ai-map-summary"
 import { cn } from "@/lib/utils"
 
 type MapWorkspaceShellProps = {
@@ -137,6 +140,7 @@ type StatusPill = {
 
 type WorkspaceDialog =
   | "ai-branch"
+  | "ai-summary"
   | "branch-starter"
   | "delete"
   | "duplicate"
@@ -715,6 +719,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const [aiBranchResult, setAiBranchResult] = useState<BuiltInBranchStarter | null>(null)
   const [isAiBranchGenerating, setIsAiBranchGenerating] = useState(false)
   const [aiBranchError, setAiBranchError] = useState<string | null>(null)
+  const [aiSummaryScope, setAiSummaryScope] = useState<"map" | "branch">("map")
+  const [aiSummaryResult, setAiSummaryResult] = useState<AiMapSummary | null>(null)
+  const [isAiSummaryLoading, setIsAiSummaryLoading] = useState(false)
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null)
+  const [aiSummaryCopied, setAiSummaryCopied] = useState(false)
   const canvasViewportRef = useRef<MapEditorCanvasViewportHandle | null>(null)
   const navigatorSearchRef = useRef<HTMLInputElement | null>(null)
   const editor = useMapEditor({ mapId: map.id, role: map.role })
@@ -1072,6 +1081,10 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     setAiBranchResult(null)
     setIsAiBranchGenerating(false)
     setAiBranchError(null)
+    setAiSummaryResult(null)
+    setIsAiSummaryLoading(false)
+    setAiSummaryError(null)
+    setAiSummaryCopied(false)
   }
 
   const handleCreateInvite = async () => {
@@ -1131,6 +1144,64 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
     }))
     publishToast(`AI ${aiBranchMode} branch added to "${anchorTitle}".`)
     closeDialog()
+  }
+
+  const handleOpenAiSummary = (scope: "map" | "branch") => {
+    setAiSummaryScope(scope)
+    setAiSummaryResult(null)
+    setAiSummaryError(null)
+    setAiSummaryCopied(false)
+    setActiveDialog("ai-summary")
+    void handleGenerateAiSummary(scope)
+  }
+
+  const handleGenerateAiSummary = async (scope: "map" | "branch") => {
+    setAiSummaryError(null)
+    setAiSummaryResult(null)
+    setIsAiSummaryLoading(true)
+    try {
+      let nodes = editor.nodes
+      let edges = editor.edges
+      if (scope === "branch" && editor.selectedNode) {
+        const sub = collectBranchSubgraph(
+          editor.selectedNode.id,
+          editor.nodes,
+          editor.edges
+        )
+        nodes = sub.nodes
+        edges = sub.edges
+      }
+      const result = await generateAiSummary({
+        edges,
+        mapName: map.name,
+        nodes,
+        scope,
+      })
+      setAiSummaryResult(result)
+    } catch (err) {
+      setAiSummaryError(
+        err instanceof Error ? err.message : "AI summary failed. Try again."
+      )
+    } finally {
+      setIsAiSummaryLoading(false)
+    }
+  }
+
+  const handleCopyAiSummary = async () => {
+    if (!aiSummaryResult) return
+    const r = aiSummaryResult
+    const lines: string[] = [`SUMMARY\n${r.summary}`]
+    if (r.decisions.length > 0)
+      lines.push(`\nKEY DECISIONS\n${r.decisions.map((d) => `• ${d}`).join("\n")}`)
+    if (r.questions.length > 0)
+      lines.push(`\nOPEN QUESTIONS\n${r.questions.map((q) => `• ${q}`).join("\n")}`)
+    if (r.actions.length > 0)
+      lines.push(`\nACTION ITEMS\n${r.actions.map((a) => `• ${a}`).join("\n")}`)
+    if (r.risks.length > 0)
+      lines.push(`\nRISKS / BLOCKERS\n${r.risks.map((x) => `• ${x}`).join("\n")}`)
+    await copyTextToClipboard(lines.join("\n"))
+    setAiSummaryCopied(true)
+    setTimeout(() => setAiSummaryCopied(false), 2000)
   }
 
   const handleSaveCurrentView = () => {
@@ -1672,6 +1743,18 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             >
               <Download className="size-3.5" />
               <span className="hidden sm:inline">Export</span>
+            </Button>
+            <Button
+              aria-label="AI summary"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => handleOpenAiSummary("map")}
+              size="sm"
+              title="AI summary of this map"
+              type="button"
+              variant="outline"
+            >
+              <AlignLeft className="size-3.5" />
+              <span className="hidden sm:inline">Summarize</span>
             </Button>
             <Button
               aria-label="More map actions"
@@ -2447,6 +2530,42 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
                     Viewer access cannot generate AI branches.
                   </p>
                 ) : null}
+              </div>
+              <div className="rounded-lg border border-border/80 bg-background/80 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      AI summary
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Summarize this branch or the full map.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    <Button
+                      className="h-7 px-2.5 text-[11px]"
+                      onClick={() => handleOpenAiSummary("branch")}
+                      size="sm"
+                      title="Summarize this node and its downstream branch"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Sparkles className="size-3.5" />
+                      Branch
+                    </Button>
+                    <Button
+                      className="h-7 px-2.5 text-[11px]"
+                      onClick={() => handleOpenAiSummary("map")}
+                      size="sm"
+                      title="Summarize the full map"
+                      type="button"
+                      variant="outline"
+                    >
+                      <AlignLeft className="size-3.5" />
+                      Full map
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="rounded-xl border border-border/80 bg-background/70 p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -3354,6 +3473,166 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {aiBranchError}
             </p>
+          ) : null}
+        </div>
+      </ModalFrame>
+
+      <ModalFrame
+        description={
+          aiSummaryScope === "branch"
+            ? `Branch summary for: ${editor.selectedNode?.title ?? "selected node"}`
+            : `Full map summary: ${map.name}`
+        }
+        onClose={closeDialog}
+        open={activeDialog === "ai-summary"}
+        title="AI summary"
+      >
+        <div className="space-y-4">
+          {isAiSummaryLoading ? (
+            <div className="flex items-center justify-center gap-3 py-8">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Generating summary…</p>
+            </div>
+          ) : null}
+
+          {aiSummaryResult && !isAiSummaryLoading ? (
+            <>
+              <div className="space-y-3 rounded-xl border border-border/70 bg-background/80 p-3.5">
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Summary
+                  </p>
+                  <p className="text-sm leading-relaxed text-foreground">
+                    {aiSummaryResult.summary}
+                  </p>
+                </div>
+
+                {aiSummaryResult.decisions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Key decisions
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSummaryResult.decisions.map((d, i) => (
+                        <li className="flex gap-2 text-sm text-foreground" key={i}>
+                          <CircleDot className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummaryResult.questions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Open questions
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSummaryResult.questions.map((q, i) => (
+                        <li className="flex gap-2 text-sm text-foreground" key={i}>
+                          <CircleDot className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                          {q}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummaryResult.actions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Action items
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSummaryResult.actions.map((a, i) => (
+                        <li className="flex gap-2 text-sm text-foreground" key={i}>
+                          <CircleDot className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                          {a}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiSummaryResult.risks.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Risks / blockers
+                    </p>
+                    <ul className="space-y-1">
+                      {aiSummaryResult.risks.map((r, i) => (
+                        <li className="flex gap-2 text-sm text-foreground" key={i}>
+                          <CircleDot className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={() => { void handleCopyAiSummary() }}
+                  type="button"
+                  variant="outline"
+                >
+                  {aiSummaryCopied ? (
+                    <>
+                      <CheckCircle2 className="mr-2 size-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="mr-2 size-4" />
+                      Copy summary
+                    </>
+                  )}
+                </Button>
+                <Button
+                  disabled={isAiSummaryLoading}
+                  onClick={() => { void handleGenerateAiSummary(aiSummaryScope) }}
+                  type="button"
+                  variant="outline"
+                >
+                  {isAiSummaryLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    "Retry"
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : null}
+
+          {!isAiSummaryLoading && !aiSummaryResult && !aiSummaryError ? (
+            <Button
+              className="w-full"
+              onClick={() => { void handleGenerateAiSummary(aiSummaryScope) }}
+              type="button"
+            >
+              <Sparkles className="mr-2 size-4" />
+              Generate summary
+            </Button>
+          ) : null}
+
+          {aiSummaryError ? (
+            <div className="space-y-3">
+              <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {aiSummaryError}
+              </p>
+              <Button
+                className="w-full"
+                disabled={isAiSummaryLoading}
+                onClick={() => { void handleGenerateAiSummary(aiSummaryScope) }}
+                type="button"
+                variant="outline"
+              >
+                Try again
+              </Button>
+            </div>
           ) : null}
         </div>
       </ModalFrame>

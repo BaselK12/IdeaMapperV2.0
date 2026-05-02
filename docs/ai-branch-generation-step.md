@@ -87,12 +87,32 @@ supabase functions deploy generate-branch
 7. Click "Insert branch" → branch attached to selected node, view pans to root
 8. Undo (Cmd+Z) works — insertion goes through the standard editor history
 
+## Rate limiting (Step 3.5 — implemented)
+
+**Limit:** 20 AI branch generations per user per rolling 60-minute window.
+
+**Implementation:** In-memory rolling-window rate limiter in the edge function, keyed by the
+authenticated user's UUID (extracted from the JWT `sub` claim — platform verifies the signature
+before our code runs).
+
+**Known limitation:** The counter is per-function-instance. Supabase may run multiple edge
+runtime instances in parallel, so a user hitting different instances sees separate counters.
+In practice this provides meaningful protection against runaway single-client usage.
+Upgrade path: replace `rateLimitBuckets` with a DB-backed counter if global consistency is needed.
+
+**Counter resets on cold start.** If the function instance restarts, the in-memory counter resets.
+This is acceptable for a soft abuse guard; it does not affect correctness.
+
+**Frontend behavior:** When the 429 fires, the structured `{ error: "AI generation limit reached.
+Try again in an hour." }` message is surfaced directly in the AI branch modal's error display.
+The Supabase SDK sets both `data` and `error` on non-2xx responses; `generateAiBranch` now checks
+`data.error` before the SDK `error` object so the human-readable server message is never lost.
+
 ## Risks / deferred
 
-- **Rate limiting / abuse**: no server-side rate limit on the edge function. Add later if needed.
 - **Review step**: direct insert with undo is the simplest safe UX. A diff preview would be a
   future enhancement.
-- **Multiple providers**: Anthropic only for now. Provider abstraction can be added later.
+- **Multiple providers**: Groq only for now. Provider abstraction can be added later.
 - **Deeper trees**: the tree layout algorithm works for 1–2 levels. For 3+ levels, positions
   may overlap. The AI prompt encourages flat trees, so this is unlikely in practice.
 - **Node color variety**: all AI nodes are currently `color: "violet"`. Color-per-kind is a
@@ -101,6 +121,6 @@ supabase functions deploy generate-branch
 ## What comes next
 
 After this feature, natural next steps include:
-- Deploy the edge function + verify live generation end-to-end
 - AI map summary / export assist
-- Rate limiting on the edge function
+- Global rate limiting via DB counter (if per-instance limit proves insufficient)
+- Node color variety: map `kind` → distinct color rather than hardcoded `"violet"`

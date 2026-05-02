@@ -177,17 +177,19 @@ export async function generateAiBranch(params: {
     }
   )
 
+  // Check structured server error FIRST — on non-2xx responses the Supabase SDK sets
+  // both `data` (JSON body) and `error` simultaneously. Checking data first ensures
+  // messages like the 429 rate-limit string reach the user instead of the generic fallback.
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error((data as { error: string }).error || "AI generation failed.")
+  }
+
   if (error) {
     throw new Error(normalizeInvokeError(error))
   }
 
   if (!data || typeof data !== "object") {
     throw new Error("AI returned an empty response.")
-  }
-
-  // Server returned a structured error
-  if ("error" in data && typeof (data as { error: string }).error === "string") {
-    throw new Error((data as { error: string }).error)
   }
 
   const rawGraph = data as AiRawGraph
