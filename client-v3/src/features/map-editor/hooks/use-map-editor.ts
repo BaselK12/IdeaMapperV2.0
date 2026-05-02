@@ -32,6 +32,8 @@ import type {
   MapEditorNodeColor,
   MapEditorNodeKind,
   MapEditorNodeMedia,
+  MapEditorNodePriority,
+  MapEditorNodeStatus,
   MapEditorSaveStatus,
   MapEditorSyncStatus,
   SelectedEdgeSummary,
@@ -40,6 +42,7 @@ import type {
 import {
   createGraphSignature,
   createNewNode,
+  createNodeId,
   filterEdgesByExistingNodes,
   getNodeTitleFromValue,
   normalizeLoadedEdges,
@@ -64,6 +67,21 @@ const ORGANIZE_LAYOUT_ORIGIN = {
 }
 const ORGANIZE_COLUMN_GAP = 120
 const ORGANIZE_ROW_GAP = 72
+
+const NODE_STATUSES: MapEditorNodeStatus[] = ["none", "in-progress", "done", "blocked"]
+const NODE_PRIORITIES: MapEditorNodePriority[] = ["none", "low", "medium", "high"]
+
+function normalizeNodeStatus(value: unknown): MapEditorNodeStatus {
+  return NODE_STATUSES.includes(value as MapEditorNodeStatus)
+    ? (value as MapEditorNodeStatus)
+    : "none"
+}
+
+function normalizeNodePriority(value: unknown): MapEditorNodePriority {
+  return NODE_PRIORITIES.includes(value as MapEditorNodePriority)
+    ? (value as MapEditorNodePriority)
+    : "none"
+}
 
 function getNodeLayoutSize(node: MapEditorNode) {
   const measuredNode = node as MapEditorNode & {
@@ -993,6 +1011,38 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     [queuePersist]
   )
 
+  const restoreGraphSnapshot = useCallback(
+    (snapshotNodes: MapEditorNode[], snapshotEdges: MapEditorEdge[]) => {
+      if (!canEdit) return
+
+      const normalizedNodes = normalizeLoadedNodes(snapshotNodes)
+      const normalizedEdges = filterEdgesByExistingNodes(
+        normalizeLoadedEdges(snapshotEdges),
+        normalizedNodes
+      )
+
+      const nextGraph = reconcileSelection(
+        normalizedNodes,
+        normalizedEdges,
+        selectedNodeIdRef.current,
+        selectedEdgeIdRef.current
+      )
+
+      // queuePersist reads latestNodesRef (pre-restore state) for undo push first
+      queuePersist(nextGraph.nodes, nextGraph.edges)
+      // then update refs and React state
+      latestNodesRef.current = nextGraph.nodes
+      latestEdgesRef.current = nextGraph.edges
+      setNodes(nextGraph.nodes)
+      setEdges(nextGraph.edges)
+      setSelectedNodeId(nextGraph.selectedNodeId)
+      setSelectedEdgeId(nextGraph.selectedEdgeId)
+      selectedNodeIdRef.current = nextGraph.selectedNodeId
+      selectedEdgeIdRef.current = nextGraph.selectedEdgeId
+    },
+    [canEdit, queuePersist]
+  )
+
   const undoGraphChange = useCallback(() => {
     if (!canEdit || undoStackRef.current.length === 0) {
       return
@@ -1317,14 +1367,19 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
           : "",
       incomingEdgeCount: edges.filter((edge) => edge.target === foundNode.id).length,
       id: foundNode.id,
+      isFrame: foundNode.data?.isFrame === true,
       kind: normalizeNodeKind(foundNode.data?.kind),
       media: normalizeNodeMedia(foundNode.data?.media),
       outgoingEdgeCount: edges.filter((edge) => edge.source === foundNode.id).length,
+      owner: typeof foundNode.data?.owner === "string" ? foundNode.data.owner : "",
       position: {
         x: Math.round(foundNode.position.x),
         y: Math.round(foundNode.position.y),
       },
+      priority: normalizeNodePriority(foundNode.data?.priority),
+      status: normalizeNodeStatus(foundNode.data?.status),
       title: getNodeTitleFromValue(foundNode.data?.title, `Node ${foundNode.id}`),
+      votes: typeof foundNode.data?.votes === "number" ? Math.max(0, Math.round(foundNode.data.votes)) : 0,
     }
   }, [edges, nodes, selectedNodeId])
 
@@ -1535,6 +1590,60 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     [canEdit, queuePersist, selectedNodeId]
   )
 
+  const updateSelectedNodeActionable = useCallback(
+    (fields: { owner?: string; priority?: MapEditorNodePriority; status?: MapEditorNodeStatus }) => {
+      if (!canEdit || !selectedNodeId) {
+        return
+      }
+
+      setNodes((currentNodes) => {
+        let didUpdate = false
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node
+          }
+
+          didUpdate = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ...(fields.owner !== undefined ? { owner: fields.owner } : {}),
+              ...(fields.priority !== undefined ? { priority: fields.priority } : {}),
+              ...(fields.status !== undefined ? { status: fields.status } : {}),
+            },
+          }
+        })
+
+        if (!didUpdate) {
+          return currentNodes
+        }
+
+        queuePersist(nextNodes, latestEdgesRef.current)
+        return nextNodes
+      })
+    },
+    [canEdit, queuePersist, selectedNodeId]
+  )
+
+  const updateNodeVotes = useCallback(
+    (nodeId: string, delta: 1 | -1) => {
+      setNodes((currentNodes) => {
+        const nextNodes = currentNodes.map((node) => {
+          if (node.id !== nodeId) return node
+          const current = typeof node.data?.votes === "number" ? node.data.votes : 0
+          return {
+            ...node,
+            data: { ...node.data, votes: Math.max(0, current + delta) },
+          }
+        })
+        queuePersist(nextNodes, latestEdgesRef.current)
+        return nextNodes
+      })
+    },
+    [queuePersist]
+  )
+
   const updateSelectedNodeCollapsed = useCallback(
     (nextCollapsed: boolean) => {
       if (!canEdit || !selectedNodeId) {
@@ -1707,6 +1816,70 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     selectedEdgeId,
     selectedNodeId,
   ])
+
+  const createFrame = useCallback(
+    (frameLabel: string, frameColor: MapEditorNodeColor) => {
+      if (!canEdit) {
+        return
+      }
+
+      const selectedNodes = latestNodesRef.current.filter(
+        (node) => node.selected && !node.data.isFrame
+      )
+
+      if (selectedNodes.length < 2) {
+        return
+      }
+
+      const padding = 40
+      const minX =
+        Math.min(...selectedNodes.map((n) => n.position.x)) - padding
+      const minY =
+        Math.min(...selectedNodes.map((n) => n.position.y)) - padding
+      const maxX =
+        Math.max(
+          ...selectedNodes.map((n) => {
+            const { width } = getNodeLayoutSize(n)
+            return n.position.x + width
+          })
+        ) + padding
+      const maxY =
+        Math.max(
+          ...selectedNodes.map((n) => {
+            const { height } = getNodeLayoutSize(n)
+            return n.position.y + height
+          })
+        ) + padding
+
+      const fw = Math.round(maxX - minX)
+      const fh = Math.round(maxY - minY)
+      const frameId = createNodeId(latestNodesRef.current)
+
+      const frameNode: MapEditorNode = {
+        data: {
+          color: frameColor,
+          frameHeight: fh,
+          frameWidth: fw,
+          isFrame: true,
+          kind: "idea",
+          title: frameLabel.trim() || "Group",
+        },
+        id: frameId,
+        position: { x: Math.round(minX), y: Math.round(minY) },
+        style: {
+          height: fh,
+          width: fw,
+          zIndex: -1,
+        },
+        type: "frameNode",
+      }
+
+      const nextNodes = [frameNode, ...latestNodesRef.current]
+      setNodes(nextNodes)
+      queuePersist(nextNodes, latestEdgesRef.current)
+    },
+    [canEdit, queuePersist]
+  )
 
   const organizeMap = useCallback(() => {
     if (!canEdit || latestNodesRef.current.length === 0) {
@@ -1923,6 +2096,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     canRedo,
     canUndo,
     clearSelection,
+    createFrame,
     deleteSelection,
     edges,
     handleConnect,
@@ -1940,6 +2114,7 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     organizeMap,
     redoGraphChange,
     reloadFromRemote,
+    restoreGraphSnapshot,
     retryLoad,
     retrySave,
     saveError,
@@ -1954,6 +2129,8 @@ export function useMapEditor({ mapId, role }: UseMapEditorParams) {
     updateSelectedEdgeDetails,
     updateNodeTitle,
     updateSelectedEdgeLabel,
+    updateNodeVotes,
+    updateSelectedNodeActionable,
     updateSelectedNodeAppearance,
     updateSelectedNodeCollapsed,
     updateSelectedNodeDescription,

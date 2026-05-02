@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell"
 import { AuthPage } from "@/pages/auth-page"
 import { DashboardPage } from "@/pages/dashboard-page"
 import { LandingPage } from "@/pages/landing-page"
+import { MapInvitePage } from "@/pages/map-invite-page"
 import { MapPage } from "@/pages/map-page"
 import { NotFoundPage } from "@/pages/not-found-page"
 import { PrivacyPage } from "@/pages/privacy-page"
@@ -33,6 +34,7 @@ function App() {
         >
           <Route element={<DashboardPage />} index />
           <Route element={<MapPage />} path="map/:mapId" />
+          <Route element={<MapInvitePage />} path="invite/:token" />
           <Route element={<SettingsPage />} path="settings" />
         </Route>
       </Route>

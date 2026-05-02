@@ -15,6 +15,10 @@ export type MapEditorNodeKind =
   | "resource"
   | "task"
 
+export type MapEditorNodePriority = "none" | "low" | "medium" | "high"
+
+export type MapEditorNodeStatus = "none" | "in-progress" | "done" | "blocked"
+
 export type MapEditorNodeMediaType = "image" | "link" | "video"
 
 export type MapEditorNodeMedia = {
@@ -27,9 +31,16 @@ export type MapEditorNodeData = {
   collapsed?: boolean
   color?: MapEditorNodeColor
   description?: string
+  frameHeight?: number
+  frameWidth?: number
+  isFrame?: boolean
   kind?: MapEditorNodeKind
   media?: MapEditorNodeMedia | null
+  owner?: string
+  priority?: MapEditorNodePriority
+  status?: MapEditorNodeStatus
   title: string
+  votes?: number
   [key: string]: unknown
 }
 
@@ -58,14 +69,19 @@ export type SelectedNodeSummary = {
   description: string
   incomingEdgeCount: number
   id: string
+  isFrame: boolean
   kind: MapEditorNodeKind
   media: MapEditorNodeMedia | null
   outgoingEdgeCount: number
+  owner: string
   position: {
     x: number
     y: number
   }
+  priority: MapEditorNodePriority
+  status: MapEditorNodeStatus
   title: string
+  votes: number
 }
 
 export type SelectedEdgeSummary = {

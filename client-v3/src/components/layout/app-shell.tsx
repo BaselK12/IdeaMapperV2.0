@@ -10,6 +10,7 @@ import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/auth-context"
+import { NotificationBell } from "@/features/notifications/components/notification-bell"
 import { cn } from "@/lib/utils"
 
 const sidebarNav = [
@@ -141,11 +142,11 @@ export function AppShell() {
           </nav>
 
           <div className="mt-4 rounded-xl border border-border/70 bg-background/80 p-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary">
                 {accountInitial}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {accountName}
                 </p>
@@ -154,16 +155,19 @@ export function AppShell() {
                 </p>
               </div>
 
-              <Button
-                className="ml-auto h-9 px-3"
-                disabled={isSigningOut}
-                onClick={handleSignOut}
-                size="sm"
-                variant="outline"
-              >
-                <LogOut className="size-4" />
-                {isSigningOut ? "Signing out..." : "Sign out"}
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <NotificationBell user={user} />
+                <Button
+                  className="h-9 w-9 p-0"
+                  disabled={isSigningOut}
+                  onClick={handleSignOut}
+                  size="sm"
+                  title={isSigningOut ? "Signing out..." : "Sign out"}
+                  variant="outline"
+                >
+                  <LogOut className="size-4" />
+                </Button>
+              </div>
             </div>
 
             {signOutError ? (
@@ -186,6 +190,7 @@ export function AppShell() {
 
               <div className="flex shrink-0 items-center gap-2">
                 <ThemeToggle compact />
+                <NotificationBell user={user} />
                 <Button
                   aria-label={isSigningOut ? "Signing out" : "Sign out"}
                   className="size-9 shrink-0"

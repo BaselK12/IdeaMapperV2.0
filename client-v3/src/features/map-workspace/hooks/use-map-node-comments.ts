@@ -9,10 +9,12 @@ import type {
   MapNodeCommentMention,
   MapNodeCommentThreads,
 } from "@/features/map-workspace/types/map-node-comments-types"
+import { createNotificationForUser } from "@/features/notifications/api/notifications-api"
 import { supabase } from "@/lib/supabase"
 
 type UseMapNodeCommentsParams = {
   mapId: string
+  mapName: string
 }
 
 type AddMapNodeCommentParams = {
@@ -57,7 +59,7 @@ function normalizeMentions(mentions: MapNodeCommentMention[]) {
   return Array.from(mentionByUserId.values())
 }
 
-export function useMapNodeComments({ mapId }: UseMapNodeCommentsParams) {
+export function useMapNodeComments({ mapId, mapName }: UseMapNodeCommentsParams) {
   const [threads, setThreads] = useState<MapNodeCommentThreads>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -172,7 +174,16 @@ export function useMapNodeComments({ mapId }: UseMapNodeCommentsParams) {
         }
       )
 
-    channel.subscribe()
+    channel.subscribe((status) => {
+      if (sessionRef.current !== sessionId) {
+        return
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        setErrorMessage(
+          "Live comment updates are unavailable. Reload the page to reconnect."
+        )
+      }
+    })
 
     return () => {
       void supabase.removeChannel(channel)
@@ -208,9 +219,24 @@ export function useMapNodeComments({ mapId }: UseMapNodeCommentsParams) {
         },
       } satisfies MapNodeCommentThreads
 
-      return persistThreads(nextThreads)
+      const saved = await persistThreads(nextThreads)
+      if (saved && params.mentions.length > 0) {
+        for (const mention of normalizeMentions(params.mentions)) {
+          void createNotificationForUser({
+            data: {
+              authorName: params.authorName.trim(),
+              commentSnippet: nextBody.slice(0, 120),
+              mapName,
+            },
+            mapId,
+            type: "mention",
+            userId: mention.userId,
+          })
+        }
+      }
+      return saved
     },
-    [persistThreads]
+    [mapId, mapName, persistThreads]
   )
 
   const setThreadResolved = useCallback(

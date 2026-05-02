@@ -1,4 +1,4 @@
-import {
+import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -41,6 +41,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css"
 
 import { Button } from "@/components/ui/button"
+import { MapEditorFrameNode } from "@/features/map-editor/components/map-editor-frame-node"
 import { MapEditorNode } from "@/features/map-editor/components/map-editor-node"
 import type { MapEditorEdge, MapEditorNode as MapEditorFlowNode } from "@/features/map-editor/types/map-editor-types"
 
@@ -108,6 +109,7 @@ function MapEditorEdgeComponent({
 }
 
 const nodeTypes = {
+  frameNode: MapEditorFrameNode,
   mapNode: MapEditorNode,
 }
 
@@ -198,6 +200,15 @@ export type MapEditorCanvasFocusRequest = {
   requestKey: number
 }
 
+export type MapEditorCanvasViewportHandle = {
+  fitView: () => void
+  getViewport: () => { x: number; y: number; zoom: number } | null
+  setViewport: (
+    viewport: { x: number; y: number; zoom: number },
+    opts?: { duration?: number }
+  ) => void
+}
+
 export type MapEditorRemoteCursor = {
   color: string
   userId: string
@@ -244,6 +255,7 @@ type MapEditorCanvasProps = {
   onUpdateNodeTitle: (nodeId: string, title: string) => void
   remoteCursors?: MapEditorRemoteCursor[]
   remoteNodeDrags?: MapEditorRemoteNodeDrag[]
+  viewportHandleRef?: React.MutableRefObject<MapEditorCanvasViewportHandle | null>
 }
 
 type RenderedRemoteNodeDragBadge = {
@@ -316,6 +328,7 @@ export function MapEditorCanvas({
   onUpdateNodeTitle,
   remoteCursors = [],
   remoteNodeDrags = [],
+  viewportHandleRef,
 }: MapEditorCanvasProps) {
   const flowContainerRef = useRef<HTMLDivElement | null>(null)
   const reactFlowRef = useRef<ReactFlowInstance | null>(null)
@@ -330,6 +343,28 @@ export function MapEditorCanvas({
     null
   )
   const [showHelp, setShowHelp] = useState(false)
+
+  useEffect(() => {
+    if (!viewportHandleRef) {
+      return
+    }
+
+    viewportHandleRef.current = {
+      fitView: () => {
+        reactFlowRef.current?.fitView({ duration: 260, padding: 0.24 })
+      },
+      getViewport: () => reactFlowRef.current?.getViewport() ?? null,
+      setViewport: (viewport, opts) => {
+        reactFlowRef.current?.setViewport(viewport, opts)
+      },
+    }
+
+    return () => {
+      if (viewportHandleRef) {
+        viewportHandleRef.current = null
+      }
+    }
+  }, [viewportHandleRef])
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowRef.current = instance

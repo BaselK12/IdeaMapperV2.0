@@ -57,6 +57,27 @@ const kindLabels = {
   task: "Task",
 }
 
+const statusDotClass: Record<string, string> = {
+  "blocked": "bg-rose-500",
+  "done": "bg-emerald-500",
+  "in-progress": "bg-sky-500",
+  "none": "",
+}
+
+const priorityLabel: Record<string, string> = {
+  high: "High",
+  low: "Low",
+  medium: "Med",
+  none: "",
+}
+
+const priorityClass: Record<string, string> = {
+  high: "text-rose-600 dark:text-rose-400",
+  low: "text-slate-500",
+  medium: "text-amber-600 dark:text-amber-400",
+  none: "",
+}
+
 function getYouTubeId(url: string) {
   const match = url.match(
     /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
@@ -113,6 +134,11 @@ export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) 
   const media = data.media ?? null
   const hasSafeMediaUrl = Boolean(media?.url && isSafeHttpUrl(media.url))
   const mediaTitle = media?.title?.trim() || media?.url || "Attached media"
+  const status = (data.status ?? "none") as string
+  const priority = (data.priority ?? "none") as string
+  const owner = typeof data.owner === "string" ? data.owner.trim() : ""
+  const votes = typeof data.votes === "number" ? Math.max(0, data.votes) : 0
+  const hasActionable = status !== "none" || priority !== "none" || owner.length > 0 || votes > 0
 
   return (
     <div
@@ -223,6 +249,31 @@ export function MapEditorNode({ data, selected }: NodeProps<MapEditorNodeData>) 
         <p className="mt-1 line-clamp-2 max-w-[18rem] text-xs leading-relaxed text-muted-foreground">
           {description}
         </p>
+      ) : null}
+      {hasActionable ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {status !== "none" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+              <span className={cn("size-1.5 rounded-full", statusDotClass[status] ?? "bg-slate-400")} />
+              {status === "in-progress" ? "In progress" : status.charAt(0).toUpperCase() + status.slice(1)}
+            </span>
+          ) : null}
+          {priority !== "none" ? (
+            <span className={cn("text-[10px] font-semibold", priorityClass[priority] ?? "text-muted-foreground")}>
+              {priorityLabel[priority]}
+            </span>
+          ) : null}
+          {owner ? (
+            <span className="rounded-full border border-border/70 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {owner.length > 16 ? `${owner.slice(0, 14)}…` : owner}
+            </span>
+          ) : null}
+          {votes > 0 ? (
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/25 bg-primary-soft/60 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+              ▲ {votes}
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
