@@ -2,7 +2,6 @@
 
 Branchly is a collaborative visual thinking workspace for turning scattered ideas into shared maps. The active app lives in `client-v3/` and combines a map editor, live collaboration, comments and mentions, AI-assisted branching and summarization, plus a presentation-ready demo pricing flow.
 
-The current product is built around the Branchly V3 app and Supabase-backed collaboration. Legacy `client/` and `server/` surfaces have been removed from the active repo wiring in favor of the Vite-based Branchly workspace.
 
 ## Screenshots
 
