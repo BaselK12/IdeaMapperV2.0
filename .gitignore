@@ -9,7 +9,7 @@ node_modules/
 # Exception: plain-text example templates are safe to commit
 !.env.example
 !.env.*.example
-# Files using the name.env convention (e.g. supa.env, db.env)
+# Files using the name.env convention (e.g. project.env, db.env)
 *.env
 !*.env.example
 

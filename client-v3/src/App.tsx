@@ -9,6 +9,7 @@ import { LandingPage } from "@/pages/landing-page"
 import { MapInvitePage } from "@/pages/map-invite-page"
 import { MapPage } from "@/pages/map-page"
 import { NotFoundPage } from "@/pages/not-found-page"
+import { PricingPage } from "@/pages/pricing-page"
 import { PrivacyPage } from "@/pages/privacy-page"
 import { ResetPasswordPage } from "@/pages/reset-password-page"
 import { SettingsPage } from "@/pages/settings-page"
@@ -21,6 +22,7 @@ function App() {
       <Route element={<Navigate replace to="/auth" />} path="/login" />
       <Route element={<AuthPage />} path="/auth" />
       <Route element={<ResetPasswordPage />} path="/auth/reset-password" />
+      <Route element={<PricingPage />} path="/pricing" />
       <Route element={<PrivacyPage />} path="/privacy" />
       <Route element={<TermsPage />} path="/terms" />
       <Route element={<Navigate replace to="/app" />} path="/dashboard" />

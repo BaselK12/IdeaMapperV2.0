@@ -10,6 +10,7 @@ import {
 import { AuthCard } from "@/components/auth/auth-card"
 import { PublicFooter } from "@/components/layout/public-footer"
 import { SupabaseWarning } from "@/components/supabase/supabase-warning"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/auth-context"
 
@@ -66,10 +67,13 @@ export function AuthPage() {
               Back
             </Link>
           </Button>
-          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles className="size-4 text-primary" />
-            Branchly
-          </p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle compact className="hidden shrink-0 sm:inline-flex" />
+            <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Sparkles className="size-4 text-primary" />
+              Branchly
+            </p>
+          </div>
         </div>
 
         <div className="mt-10 grid flex-1 items-center gap-10 pb-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-14">

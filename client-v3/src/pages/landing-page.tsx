@@ -16,6 +16,7 @@ import {
 } from "@/components/landing/landing-product-previews"
 import { PublicFooter } from "@/components/layout/public-footer"
 import { SupabaseWarning } from "@/components/supabase/supabase-warning"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { useTheme } from "@/components/theme/theme-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -104,7 +105,15 @@ export function LandingPage() {
             </span>
             Branchly
           </Link>
-          <div className="flex items-center gap-2">
+
+          <nav className="hidden items-center sm:flex">
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/pricing">Pricing</Link>
+            </Button>
+          </nav>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle compact className="hidden shrink-0 sm:inline-flex" />
             <Button asChild variant="ghost">
               <Link to="/auth?tab=login">Log in</Link>
             </Button>

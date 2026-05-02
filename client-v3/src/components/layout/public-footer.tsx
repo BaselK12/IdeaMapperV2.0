@@ -11,6 +11,12 @@ export function PublicFooter() {
         <div className="flex gap-5">
           <Link
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            to="/pricing"
+          >
+            Pricing
+          </Link>
+          <Link
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             to="/privacy"
           >
             Privacy Policy

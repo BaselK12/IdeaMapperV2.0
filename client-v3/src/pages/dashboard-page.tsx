@@ -199,6 +199,7 @@ type DashboardMapSectionProps = {
   currentUserId: string | undefined
   description: string
   emptyMessage: string
+  keyId: string
   maps: AccessibleMap[]
   onOpenMap: (mapId: string) => void
   onTogglePin: (mapId: string) => void
@@ -210,6 +211,7 @@ function DashboardMapSection({
   currentUserId,
   description,
   emptyMessage,
+  keyId,
   maps,
   onOpenMap,
   onTogglePin,
@@ -217,7 +219,7 @@ function DashboardMapSection({
   title,
 }: DashboardMapSectionProps) {
   return (
-    <Card className="border-border/70 bg-card/95 shadow-sm">
+    <Card className="border-border/70 bg-card/95 shadow-sm" data-section={keyId}>
       <CardHeader className="space-y-1 border-b border-border/70 pb-4">
         <CardTitle className="text-base">{title}</CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -416,6 +418,39 @@ export function DashboardPage() {
     !mapsQuery.isError &&
     accessibleMaps.length > 0 &&
     filteredMaps.length === 0
+  const dashboardSections = [
+    {
+      description: "Maps you opened most recently on this device.",
+      emptyMessage: "Open a map and it will appear here for faster return-to-work.",
+      keyId: "recent",
+      maps: recentMaps,
+      title: "Recent",
+    },
+    {
+      description: "Keep important maps pinned for one-click return.",
+      emptyMessage: "Pin a map from any dashboard card or list row to keep it here.",
+      keyId: "pinned",
+      maps: pinnedMaps,
+      title: "Pinned",
+    },
+    {
+      description: "Maps owned by collaborators and shared into your workspace.",
+      emptyMessage: "When someone shares a map with you, it will show up here.",
+      keyId: "shared",
+      maps: sharedWithMeMaps,
+      title: "Shared with me",
+    },
+    {
+      description: "Maps with the freshest edits across your workspace.",
+      emptyMessage: "Edits will surface here as your workspace changes.",
+      keyId: "recently-updated",
+      maps: recentlyUpdatedMaps,
+      title: "Recently updated",
+    },
+  ]
+  const mobileDashboardSections = dashboardSections.filter(
+    (section) => section.maps.length > 0
+  )
 
   const openCreateModal = () => {
     setCreateError(null)
@@ -655,48 +690,41 @@ export function DashboardPage() {
       {mapsQuery.isLoading ? <SectionLoadingGrid /> : null}
 
       {!mapsQuery.isLoading && !mapsQuery.isError && !hasNoMaps ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <DashboardMapSection
-            currentUserId={userId}
-            description="Maps you opened most recently on this device."
-            emptyMessage="Open a map and it will appear here for faster return-to-work."
-            maps={recentMaps}
-            onOpenMap={handleOpenMap}
-            onTogglePin={handleTogglePin}
-            pinnedMapIds={pinnedMapIds}
-            title="Recent"
-          />
-          <DashboardMapSection
-            currentUserId={userId}
-            description="Keep important maps pinned for one-click return."
-            emptyMessage="Pin a map from any dashboard card or list row to keep it here."
-            maps={pinnedMaps}
-            onOpenMap={handleOpenMap}
-            onTogglePin={handleTogglePin}
-            pinnedMapIds={pinnedMapIds}
-            title="Pinned"
-          />
-          <DashboardMapSection
-            currentUserId={userId}
-            description="Maps owned by collaborators and shared into your workspace."
-            emptyMessage="When someone shares a map with you, it will show up here."
-            maps={sharedWithMeMaps}
-            onOpenMap={handleOpenMap}
-            onTogglePin={handleTogglePin}
-            pinnedMapIds={pinnedMapIds}
-            title="Shared with me"
-          />
-          <DashboardMapSection
-            currentUserId={userId}
-            description="Maps with the freshest edits across your workspace."
-            emptyMessage="Edits will surface here as your workspace changes."
-            maps={recentlyUpdatedMaps}
-            onOpenMap={handleOpenMap}
-            onTogglePin={handleTogglePin}
-            pinnedMapIds={pinnedMapIds}
-            title="Recently updated"
-          />
-        </div>
+        <>
+          <div className="grid gap-4 md:hidden">
+            {mobileDashboardSections.map((section) => (
+              <DashboardMapSection
+                currentUserId={userId}
+                description={section.description}
+                emptyMessage={section.emptyMessage}
+                key={section.keyId}
+                keyId={section.keyId}
+                maps={section.maps}
+                onOpenMap={handleOpenMap}
+                onTogglePin={handleTogglePin}
+                pinnedMapIds={pinnedMapIds}
+                title={section.title}
+              />
+            ))}
+          </div>
+
+          <div className="hidden gap-4 md:grid xl:grid-cols-2">
+            {dashboardSections.map((section) => (
+              <DashboardMapSection
+                currentUserId={userId}
+                description={section.description}
+                emptyMessage={section.emptyMessage}
+                key={section.keyId}
+                keyId={section.keyId}
+                maps={section.maps}
+                onOpenMap={handleOpenMap}
+                onTogglePin={handleTogglePin}
+                pinnedMapIds={pinnedMapIds}
+                title={section.title}
+              />
+            ))}
+          </div>
+        </>
       ) : null}
 
       <Card className="animate-fade-up border-border/70 bg-card/95 shadow-md">

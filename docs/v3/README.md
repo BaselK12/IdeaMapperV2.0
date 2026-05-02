@@ -1,9 +1,8 @@
-# V3 Developer Setup
+# Branchly Developer Setup
 
-This repository contains two frontend clients:
+This repository now uses a single active frontend:
 
-- `client/` — V2 (legacy CRA app, largely unchanged)
-- `client-v3/` — V3 (Vite + React + TypeScript — **the active app**)
+- `client-v3/` — Branchly (Vite + React + TypeScript)
 
 ---
 
@@ -17,7 +16,7 @@ This repository contains two frontend clients:
 
 ## Environment Setup
 
-**V3 is the only client in active development. All steps below apply to `client-v3/`.**
+All steps below apply to `client-v3/`.
 
 ### 1. Create your local env file
 
@@ -116,10 +115,7 @@ See `client-v3/e2e/.env.test.example` for details on the E2E account setup.
 
 ---
 
-## Run V2 Locally (legacy only)
+## Notes
 
-```bash
-npm run dev:v2
-```
-
-V2 reads `client/.env.local`. Copy `client/.env.example` to `client/.env.local` and fill in the same Supabase URL and anon key.
+- The active product surface is `client-v3/`.
+- Direct invite / notification flows depend on the collaboration SQL checkpoint in `docs/collaboration-infrastructure-step.md`. That manual setup is not handled by this guide.

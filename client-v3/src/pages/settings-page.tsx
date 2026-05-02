@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
+  CreditCard,
   KeyRound,
   Mail,
   Palette,
@@ -13,6 +15,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/features/auth/auth-context"
+import { useDemoPlan } from "@/features/demo-plan/demo-plan-context"
+import { UpgradeModal } from "@/features/demo-plan/upgrade-modal"
+import { PLAN_CONFIGS, type DemoPlan } from "@/lib/demo-plan"
 import { normalizeAuthError, supabase } from "@/lib/supabase"
 
 type FeedbackState = {
@@ -52,6 +57,9 @@ export function SettingsPage() {
   )
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isSendingReset, setIsSendingReset] = useState(false)
+  const { plan, planConfig } = useDemoPlan()
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const upgradeHighlight: DemoPlan = plan === "free" ? "pro" : "team"
 
   const accountInitial = useMemo(() => {
     const source = displayName || email || "B"
@@ -254,6 +262,46 @@ export function SettingsPage() {
           <Card className="border-border/70 bg-card/95 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
+                <CreditCard className="size-4 text-primary" />
+                Plan
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className={
+                    plan === "free"
+                      ? "inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                      : plan === "pro"
+                        ? "inline-flex items-center rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary"
+                        : "inline-flex items-center rounded-full bg-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-500"
+                  }
+                >
+                  {planConfig.label}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {PLAN_CONFIGS[plan].price}
+                  {plan !== "free" ? " / mo per user" : " / mo"}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">{planConfig.description}</p>
+              {plan !== "team" && (
+                <Button
+                  className="gap-2"
+                  onClick={() => setUpgradeModalOpen(true)}
+                  size="sm"
+                  variant="outline"
+                >
+                  Upgrade plan
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 bg-card/95 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
                 <KeyRound className="size-4 text-primary" />
                 Password
               </CardTitle>
@@ -291,6 +339,12 @@ export function SettingsPage() {
           </Card>
         </div>
       </div>
+
+      <UpgradeModal
+        highlightPlan={upgradeHighlight}
+        onClose={() => setUpgradeModalOpen(false)}
+        open={upgradeModalOpen}
+      />
     </section>
   )
 }

@@ -1,14 +1,11 @@
 {
-  "name": "ideamapper-workspace",
+  "name": "branchly-workspace",
   "private": true,
   "workspaces": [
-    "client",
     "client-v3"
   ],
   "scripts": {
-    "dev:v2": "npm run start --workspace client",
     "dev:v3": "npm run dev --workspace client-v3",
-    "build:v2": "npm run build --workspace client",
     "build:v3": "npm run build --workspace client-v3"
   }
 }

@@ -10,6 +10,7 @@ import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/auth-context"
+import { PlanBadge } from "@/features/demo-plan/plan-badge"
 import { NotificationBell } from "@/features/notifications/components/notification-bell"
 import { cn } from "@/lib/utils"
 
@@ -114,7 +115,7 @@ export function AppShell() {
             </div>
           </div>
 
-          <nav aria-label="Workspace navigation" className="mt-4 grid gap-1.5">
+          <nav aria-label="Workspace navigation" className="mt-3 grid gap-1.5">
             {sidebarNav.map((item) => {
               const Icon = item.icon
               const baseClassName =
@@ -141,7 +142,7 @@ export function AppShell() {
             })}
           </nav>
 
-          <div className="mt-4 rounded-xl border border-border/70 bg-background/80 p-3">
+          <div className="mt-3 rounded-xl border border-border/70 bg-background/80 p-3">
             <div className="flex items-center gap-2">
               <div className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary">
                 {accountInitial}
@@ -173,6 +174,8 @@ export function AppShell() {
             {signOutError ? (
               <p className="mt-3 text-xs text-destructive">{signOutError}</p>
             ) : null}
+
+            <PlanBadge />
           </div>
         </aside>
 

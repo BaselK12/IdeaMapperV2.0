@@ -19,15 +19,15 @@ Override model at any time: `supabase secrets set GROQ_MODEL=llama-3.3-70b-versa
 ## Status
 
 **UI and architecture: fully implemented.**
-**Live generation: requires edge function deployment + Anthropic API key (see below).**
+**Live generation: requires edge function deployment + Groq secret setup (see below).**
 
 ## Files changed
 
 ### New files
 - `supabase/functions/generate-branch/index.ts`
   — Deno edge function. Accepts `{ nodeTitle, nodeDescription, mode, instruction }`, calls
-    `claude-3-5-haiku-20241022`, validates and returns `{ nodes, edges }`. Uses
-    `ANTHROPIC_API_KEY` from Supabase secrets — never exposed to the browser.
+    the configured Groq model, validates and returns `{ nodes, edges }`. Uses
+    `GROQ_API_KEY` from Supabase secrets — never exposed to the browser.
 
 - `client-v3/src/lib/ai-branch-gen.ts`
   — Frontend service boundary. Calls the edge function via `supabase.functions.invoke()`,
@@ -60,7 +60,7 @@ Override model at any time: `supabase secrets set GROQ_MODEL=llama-3.3-70b-versa
 
 ## Activation status
 
-**Live and deployed** on project `lvejpzukguidgvcqroyk` (IdeaMapperClean).
+**Live and deployed** on project `lvejpzukguidgvcqroyk` (Branchly).
 
 Secret `GROQ_API_KEY` is set. Edge function is deployed with JWT verification enabled.
 Smoke test confirmed valid `{ nodes, edges }` output from Groq.

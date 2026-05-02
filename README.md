@@ -1,335 +1,216 @@
-# MindMapProject
+# Branchly
+
+Branchly is a collaborative visual thinking workspace for turning scattered ideas into shared maps. The active app lives in `client-v3/` and combines a map editor, live collaboration, comments and mentions, AI-assisted branching and summarization, plus a presentation-ready demo pricing flow.
 
-## Setup and Installation Tutorial - 2.5 minutes tutorial to setup the project successfully 
+The current product is built around the Branchly V3 app and Supabase-backed collaboration. Legacy `client/` and `server/` surfaces have been removed from the active repo wiring in favor of the Vite-based Branchly workspace.
 
-https://github.com/user-attachments/assets/68bbaec1-5062-457c-93e4-39e7b8d68137
+## Screenshots
 
-Sign-in page, with changing motivating titles! Using Google, Github, one-time magic link. Reset password
+| Landing | Dashboard |
+| --- | --- |
+| ![Branchly landing page](client-v3/review-screenshots/readme/landing.png) | ![Branchly dashboard](client-v3/review-screenshots/readme/dashboard.png) |
+| Workspace (dark mode) | Pricing |
+| ![Branchly workspace dark mode](client-v3/review-screenshots/readme/workspace-dark.png) | ![Branchly pricing page](client-v3/review-screenshots/readme/pricing.png) |
+| Upgrade modal | AI summary |
+| ![Branchly upgrade modal](client-v3/review-screenshots/readme/upgrade-modal.png) | ![Branchly AI summary modal](client-v3/review-screenshots/readme/ai-summary.png) |
 
-<img width="2407" height="1308" alt="image" src="https://github.com/user-attachments/assets/483974ac-91f9-44c4-b408-4687782b263c" />
+## Features
 
-Sign-up 
+- Collaborative map creation and editing with drag-and-drop nodes, custom edges, media, map descriptions, auto-organize, zoom/fit controls, and duplicate-map support.
+- Real-time workspace presence through Supabase Realtime, including live cursors, participant presence, and shared editing status.
+- Dashboard sections for recent, pinned, shared-with-me, and recently updated maps, plus search and quick reopen flows.
+- Templates and built-in branch starters for faster map creation and structured branching.
+- Comments and `@mentions` on nodes, with notification UI and best-effort real-time notification delivery.
+- Direct member invites and role-based collaboration controls are implemented in the UI, but the `map_invites` / notification SQL checkpoint must be applied manually before those flows work end to end.
+- Saved views, presentation/focus mode, and in-map navigation for walking teams through a map as a demo or working session.
+- Version snapshots and restore flows for point-in-time map capture.
+- Command palette access, batch selection actions, export, and workspace utilities for faster editing.
+- Frames/groups for organizing clusters of nodes visually.
+- Actionable nodes with owner, status, priority, and voting metadata.
+- AI branch generation with Groq-backed edge functions.
+- AI map and branch summarization with structured sections for summary, decisions, questions, actions, and risks.
+- Demo pricing and upgrade flows for Free, Pro, and Team plans, plus light and dark mode across the active product.
 
-<img width="1777" height="1038" alt="image" src="https://github.com/user-attachments/assets/0d1c62f1-50a7-4169-b0c3-fc59e09d5d0e" />
+## Tech Stack
 
-Dashboard
+- React 18
+- Vite
+- TypeScript
+- Tailwind CSS
+- Supabase Auth, Postgres, Realtime, and Storage
+- Supabase Edge Functions
+- Groq API for AI generation and summarization
+- Playwright for end-to-end and smoke testing
 
-<img width="2076" height="1168" alt="image" src="https://github.com/user-attachments/assets/52054edf-cc1a-4e7b-8ed9-335f1fba4649" />
+## Project Structure
 
-Dark mode dashboard
+- `client-v3/` — active Branchly frontend application
+- `client-v3/src/` — app source, routes, shared UI, and feature entry points
+- `client-v3/src/features/` — feature-oriented code grouped by domain such as auth, maps, map editor, workspace, notifications, and demo plan
+- `client-v3/src/components/` — reusable layout and UI composition
+- `client-v3/src/lib/` — shared services, Supabase client wiring, AI service boundaries, and demo plan helpers
+- `supabase/` — Supabase project config, checked-in migrations, seed data, and edge functions
+- `supabase/functions/` — `generate-branch` and `summarize-map` edge functions
+- `supabase/migrations/` — checked-in schema migrations for the active Branchly database
+- `docs/` — implementation checkpoints, deployment notes, and manual setup references
 
-<img width="2019" height="1155" alt="image" src="https://github.com/user-attachments/assets/d5745a40-ff68-43c3-8298-a9bca4f941f2" />
+## Local Setup
 
-Limit Modal
+### 1. Install dependencies
 
-<img width="649" height="449" alt="image" src="https://github.com/user-attachments/assets/174d76e4-a667-4f0c-b469-468f24624bae" />
+```bash
+npm install
+```
 
-Burger Menue with rotating square on the 3-dots
+### 2. Configure client environment
 
-<img width="364" height="480" alt="image" src="https://github.com/user-attachments/assets/516bc524-736a-416c-849f-dac5e4421db8" />
+```bash
+cp client-v3/.env.example client-v3/.env.local
+```
 
-Inside the map-editor, with light background and dotted black grid.
+Set these values in `client-v3/.env.local`:
 
-<img width="2535" height="1262" alt="image" src="https://github.com/user-attachments/assets/e9ffe247-3772-4c68-8a39-da395071b724" />
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `E2E_ADMIN_EMAIL`
+- `E2E_ADMIN_PASSWORD`
+- `E2E_VIEWER_EMAIL`
+- `E2E_VIEWER_PASSWORD`
 
-The right-menu
+The `E2E_*` values are only for Playwright and are not used by the production app runtime.
 
-<img width="490" height="1133" alt="image" src="https://github.com/user-attachments/assets/fb80ab00-1bb8-4b99-95a4-745601bb7c93" />
+### 3. Run the app
 
-Plan upgrading modal
+```bash
+# From the repo root
+npm run dev:v3
 
-<img width="673" height="560" alt="image" src="https://github.com/user-attachments/assets/f99f7fd5-dbc3-45b4-9596-70549b12f1c6" />
+# Or directly
+cd client-v3
+npm run dev
+```
 
-# Background & Motivation
+The Vite app runs at `http://localhost:5173`.
 
-The original version of the project was built using Firebase and implemented a basic collaborative mind-mapping environment. Although it was functional, it had many limitations.:
+### 4. Optional local Supabase CLI workflow
 
-Real-time interactions caused extreme database load (thousands of writes per second for cursor movement).
+If you want to run against a local Supabase stack instead of a hosted project:
 
-Some features listed in the previous README weren't implemented or non-functional.
+```bash
+supabase start
+supabase db reset
+```
 
-The UI/UX was outdated and difficult to use. A simple green UI.
+Then point `client-v3/.env.local` at the local Supabase URL and anon key reported by the CLI. For a linked remote project, use your normal Supabase CLI flow such as `supabase db push`.
 
-Authentication lacked critical workflows (email confirmation before granting a session, password reset).
+### 5. Typecheck and build
 
-Editors had too much power (They could delete the owner's map).
+```bash
+cd client-v3
+npm run typecheck
+npm run build
+```
 
-The dashboard and map editor were not scalable or user-friendly.
+## Environment Variables and Secrets
 
-Code was messy and condensed into 3-4 .jsx files. While .css files were present and written, they weren't connected to the .jsx correctly. All of the designs were done in-line, in files that were 1000+ lines.
+- `client-v3/.env.local` holds the browser-safe `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Never put service-role keys, database passwords, or Groq secrets in `VITE_*` variables.
+- `GROQ_API_KEY` must be stored server-side as a Supabase Edge Function secret.
+- `GROQ_MODEL` is optional and can override the default Groq model for AI functions.
+- Playwright account credentials live in `client-v3/.env.local` as `E2E_*` variables for test runs only.
 
-There was no reusable modals or code.
+## Supabase Setup
 
-The real-time collaboration system relied entirely on Firebase database writes/reads, resulting in lag, quota issues, and poor performance.
+Branchly uses the checked-in migrations under `supabase/migrations/` for the main app schema. Typical workflows:
 
-The goal of this new version was to fully redesign the project from the ground up, migrate it to Supabase, fix all of the broken and missing features, improve performance, build a new UI, design a better UX, and build a modern real-time environment to deploy a production project later.
+```bash
+# Local reset/apply
+supabase db reset
 
-The project now operates on a stronger foundation, with a new architecture, a new real-time engine that uses Supabase built in sockets, new UI/UX, and new features that follow a modern 2025 UI/UX.
+# Linked remote project
+supabase db push
+```
 
+Edge functions live under `supabase/functions/` and should be deployed separately from schema changes.
 
-# Project Overview
+### Manual collaboration SQL note
 
-ideaMapper is a real-time collaborative mind-mapping web application where multiple users can create, join, and work on shared maps simultaneously.
+Direct email invites and notification-backed invite acceptance depend on the SQL checkpoint in:
 
-Users can:
+```text
+docs/migrations/20260502000000_collaboration_infrastructure.sql
+```
 
-1. Create and organize ideas visually
+That file is currently documented as a manual setup step and is not part of `supabase/migrations/*`. If you need `map_invites`, invite acceptance, or notification RPC support, apply that SQL manually in Supabase before using those flows. This cleanup pass intentionally does not move or apply it.
 
-2. Move, rename, and customize nodes
+## AI Setup
 
-3. Collaborate with others in real-time with no lag
+Branchly ships two AI-related edge functions:
 
-4. Track who is online inside each map (realtime using Supabase broadcast)
+- `supabase/functions/generate-branch`
+- `supabase/functions/summarize-map`
 
-5. Control permissions and map ownership
+Set the Groq secret server-side and deploy both functions:
 
-6. Customize canvas appearance (Colors, to grid type and grid color)
+```bash
+supabase secrets set GROQ_API_KEY=gsk_...
+supabase functions deploy generate-branch
+supabase functions deploy summarize-map
+```
 
-7. Manage their account and subscription plan
+Optional model override:
 
-8. Navigate maps using a built-in minimap
+```bash
+supabase secrets set GROQ_MODEL=llama-3.3-70b-versatile
+```
 
-9. The application is powered by:
+Current AI behavior:
 
-10. Supabase Authentication (email/password, magic links)
+- AI branch generation creates subtree suggestions from a selected node.
+- AI summary can summarize a full map or a downstream branch.
+- Both edge functions use in-memory rolling-window rate limiting at 20 requests per user per hour.
+- The current rate limiting is per function instance, not globally shared across all instances.
 
-11. Supabase Realtime Broadcast (WebSocket-based collaboration)
+## Demo Pricing and Plans
 
-12. Supabase Postgres + RLS (secure, permission-controlled storage)
+The pricing system in this repo is presentation-oriented, not production billing:
 
-13. ReactFlow for graph visualization
+- Free, Pro, and Team plans are simulated in the client.
+- Plan switching is stored locally with browser `localStorage`.
+- Upgrade flows and feature gates are for demo/product presentation purposes.
+- There is no Stripe integration, no real checkout, and no server-backed entitlements in this pass.
 
-This version represents a full migration from Firebase to Supabase, along with a full UI/UX redesign and implementation of all previously incomplete features.
+## Known Limitations
 
-# Features
+- Billing is demo-only. There is no real payment backend or subscription enforcement.
+- Some feature gating is client-side only and is not a hardened entitlement system.
+- AI rate limiting is in-memory and per edge-function instance, so it is best treated as a soft abuse guard.
+- Direct invite and invite-acceptance flows require the manual collaboration SQL checkpoint; without it, `map_invites`-backed features will fail.
+- Saved views, snapshots, and per-node voting are currently browser-local state rather than shared server-backed records.
+- This repo is not production-hardened for billing, abuse prevention, or all collaboration edge cases.
 
-## Authentication & Account Management
+## Scripts
 
-- Email/Password Authentication (Supabase)
-- Required Email Confirmation
-Users must verify their email before gaining access and granting them a session in the backend.
+From the repo root:
 
-- Password Reset
-Fully implemented password recovery flow (non-functional in the old version).
+- `npm run dev:v3` — run the active Branchly V3 app
+- `npm run build:v3` — build the active Branchly V3 app
 
-- Magic Link Login
-Users can log in using a secure one-time link sent to their email.
+From `client-v3/`:
 
-- Profile Page
-   - View and edit profile
-   - Upload profile picture (Supabase Storage)
+- `npm run dev` — start the Vite dev server
+- `npm run build` — typecheck and build the app
+- `npm run typecheck` — run `tsc -b --noEmit`
+- `npm run lint` — run ESLint
+- `npm run test:e2e` — run Playwright E2E tests
+- `npm run test:smoke` — run the smoke subset of Playwright tests
 
+## Roadmap
 
-## Dashboard & Maps Management
-- Fully redesigned dashboard UI/UX
-   - Modern layout, smoother navigation, and improved usability.
-
-- Map Cards with full metadata:
-   1. Map name
-   2. Description
-   3. Author name
-   4. “Last updated” timestamp
-   5. Beautiful modern presentation
-
-- Map actions menu (3-dot hamburger)
-   1. Rename map
-   2. Edit description
-   3. Duplicate map
-   4. Delete map
-
-- Safe permission system
-   - Only owners can delete their own maps
-   - Editors cannot delete maps they did not create
-   - Prevents destroying others' work
-
-## Subscription system with map limits:
-
-- Introudced 3 plans:
-   - Free (Limit of 5 maps)
-   - Pro (Limit of 20 maps)
-   - Unlimited (No limit)
-
-- Integrated UI messages when limits are reached and upgrade options.
-
-- New sidebar menu:
-   1. Sign out
-   2. Profile/account settings
-   3. Light/dark mode toggle
-   4. Upgrade subscription
-   5. User info section
-
-
-## Real-Time Collaboration
-
-All real-time features now use Supabase Realtime Broadcast channels instead of database writes and pulls which consumed a lot of quota previously.
-
-- Live cursor sharing
-   - Smooth, low-latency cursor position updates for all users.
-
-- Adjustable cursor FPS
-   - Users can choose how fast their own cursor animates (1–60 FPS).
-
-- Toggle cursor visibility
-   1. Hide your own cursor
-   2. Hide all other users’ cursors
-
-- Real-time node movement
-   - Dragging nodes updates instantly for all connected users.
-
-- Real-time online/offline presence (accurate)
-   - Users appear Online the moment they enter the map
-   - Switch to Offline instantly when they leave
-   - No refresh required
-
-- Participants list
-   - Shows all users with presence status inside the map.
-
-## Mind Map Editing Features
-- Drag-and-drop nodes
-- Rename nodes
-- Add descriptions to maps
-- Connect nodes
-- Custom edge styles
-- Add links to nodes
-
-
-## Canvas & UI Customization
-- Canvas background options
-   1. Dotted grid
-   2. Lined grid
-   3. No grid
-
-- Custom canvas color
-- Custom grid color
-- Updated node UI
-
-Improved spacing, introduced a new default color scheme, hover effects, and shadows.
-
-## Mini-Map 
-- Toggle mini-map
-- Real-time preview of the entire map
-- Click-to-navigate and drag support
-
-Helps users navigate large mind maps easily.
-
-## Cloud Features (Supabase Database & RLS)
-- Automatic map saving
-- Cloud synchronization
-- Row-Level Security (RLS)
-
-Ensures that:
-
-- A user cannot modify another user’s data
-- Editors cannot delete maps
-- All access rules are enforced via SQL policies
-
-- Database schema fully migrated to Supabase
-
-## - Performance Fixes and Improvements
-- Eliminated the need to save/write to db for realtime updates, and introduced Supabase built-in sockets for realtime: Supabase broadcast.
-
-The Old version sends thousands of live cursor updated to the database. I replaced it with WebSocket packets and throttled the update rate. 
-
-- Faster dashboard loading
-- Efficient Supabase queries
-- Optimized ReactFlow rendering
-- UI animations on login screen
-- Cleaner code structure
-
-
-## Login and Sign-up
-- New UI/UX
-- Ability to sign-in using email/password, google, or github.
-- Added a mind-map interactive background that the user can interact with in the login/signup page.
-- Reset password.
-- One time magic link sign in by email.
-
-# Tech Stack
-
-- Frontend
-   1. React
-   2. ReactFlow
-   3. JavaScript / JSX
-   4. CSS
-
-- Backend / Database
-
-1. Supabase Auth
-2. Supabase Realtime Broadcast
-3. Supabase Postgres
-4. Supabase Storage
-5. Row-Level Security (RLS)
-6. VSCode
-7. Git / GitHub
-8. Photoshop for design assets
-9. Docker (Mainly for supabase SQL exporting (I exported the .sql for Supabase using Docker))
-
-
-
-## Installation and Setup
-
-You can clone the project and use it, updates are sent to my Supabase cloud. If you want to develop, update, or edit the project, especially from the database side, then you need to setup your own *Supabase*.
-
-### Step 1: Clone the repo:
-1. From your cmd, in your chosen location, clone the repository using "git clone https://github.com/MisterMassad/ideaMapper"
-2. Install the necessary dependencies for React and Supabase: "npm install" in the root.
-   1. Additionally, do the following:
-      1. "cd server" -> "npm install"
-      2. "cd client" -> "npm install"
-
-
-### Step 2: Setup Supabase
-
-1. Go to your Supabase console.
-2. Create a new project (Dashboard -> New Project).
-3. Open the SQL Editor in your Supabase project. (You can find it in the left menu)
-4. Open the file: "supabase/migrations/20251023180322_remote_schema.sql" and copy the *entire* file.
-5. Paste the file contents in teh SQL  editor, and click *Run* or alternatively, press "CTRL + ENTER".
-6. Find your API keys and Project ID:
-   1. Navigate to Project settings form the left menu, then navigate to "General".
-   2. Find your project ID, and copy it.
-   3. Open the supabaseClient.js file. ("client\src\supabaseClient.js")
-   4. Put your project ID as follows:
-   https://<PROJECT_ID>.supabase.co
-   (Don't include <> around the PROJECT_ID)
-   5. Navigate to Project Settings from the Left Menu. (Press the settings icon)
-   6. Find and navigate to API Keys. (Link: https://supabase.com/dashboard/project/mfljgxvjzvlolkalkxsh/settings/api-keys)
-   3. Open the supabaseClient.js file. ("client\src\supabaseClient.js")
-   4. Copy and paste your anon public key.
-
-### Step 3: Run the project
-
-1. Run the server first using "npm start"
-2. Run the client using "npm start"
-
-## Common Problems:
-- You need to install dependencies in the:
-     - The root directory
-     - Server
-     - Client
- 
-- If you can run the server, but not the client, then the dependencies weren't installed correctly in the client:
-   - You can re run npm install inside the client.
-   - A common error is that react scripts are not found, you can fix using: "npm install react-scripts@5.0.1 --save"
-
-## Notes and Credits:
-- My task in this project was to migrate the project from using Firebase to Supabase, patch bugs, and add new features to the project.
-- This project is being worked on by students in the Semester Project at the University of Haifa.
-- Original project's repo: https://github.com/xCraftLab/HiveMindMap
-
-## You're done! Happy coding!
-
-# Update Suggestions:
-- Add new types of maps that offer different types than the current node system.
-
-- Implement payment backend for plan upgrading.
-
-- Update the UX of node and edge customization.
-
-- Add the ability to add a description, an image, a video to the nodes.
-
-- Add the ability for an owner to kick an editor.
-
-- Add the ability to add a viewer to the map with no editing privileges.
+- Replace demo pricing with real billing and server-backed entitlements if the product moves beyond demos.
+- Move AI limits to a shared backend counter for stronger rate limiting.
+- Make snapshots, saved views, and voting server-backed where shared persistence matters.
+- Harden invite flows and fold the collaboration SQL checkpoint into the normal migration path.
+- Expand automated coverage across collaboration, AI, and mobile workflows.
 
 

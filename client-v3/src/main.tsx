@@ -6,6 +6,7 @@ import { BrowserRouter } from "react-router-dom"
 import App from "./App"
 import { ThemeProvider } from "@/components/theme/theme-provider"
 import { AuthProvider } from "@/features/auth/auth-context"
+import { DemoPlanProvider } from "@/features/demo-plan/demo-plan-context"
 import "./index.css"
 
 const queryClient = new QueryClient()
@@ -15,9 +16,11 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <DemoPlanProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </DemoPlanProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

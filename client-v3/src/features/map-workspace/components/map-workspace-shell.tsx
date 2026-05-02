@@ -117,6 +117,8 @@ import type { AiBranchMode } from "@/lib/ai-branch-gen"
 import type { BuiltInBranchStarter } from "@/features/maps/types/maps-types"
 import { generateAiSummary, collectBranchSubgraph } from "@/lib/ai-map-summary"
 import type { AiMapSummary } from "@/lib/ai-map-summary"
+import { useDemoPlan } from "@/features/demo-plan/demo-plan-context"
+import { UpgradeModal } from "@/features/demo-plan/upgrade-modal"
 import { cn } from "@/lib/utils"
 
 type MapWorkspaceShellProps = {
@@ -677,6 +679,8 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   const toastTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [navigatorKindFilter, setNavigatorKindFilter] = useState<MapEditorNodeKind | "all">("all")
+  const { aiUsage, canUseFeature, incrementAiUsage: trackAiUsage, isAtLimit } = useDemoPlan()
+  const [planUpgradeOpen, setPlanUpgradeOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [commentError, setCommentError] = useState<string | null>(null)
   const [focusRequest, setFocusRequest] = useState<MapEditorCanvasFocusRequest | null>(
@@ -980,6 +984,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const toggleFocusMode = () => {
+    if (!isFocusMode && !canUseFeature("presentationMode")) {
+      publishToast("Presentation mode requires Pro or Team plan.", "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     setIsFocusMode((currentValue) => {
       const nextValue = !currentValue
       if (nextValue && savedViews.length > 0) {
@@ -1088,6 +1097,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const handleCreateInvite = async () => {
+    if (!canUseFeature("directInvites")) {
+      publishToast("Direct invites require Team plan.", "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     const normalizedEmail = inviteEmail.trim().toLowerCase()
     if (!normalizedEmail) return
 
@@ -1099,6 +1113,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const handleOpenAiBranch = () => {
+    if (isAtLimit("aiBranchPerMonth", aiUsage.aiBranch)) {
+      publishToast("AI branch limit reached. Upgrade to Pro for unlimited.", "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     setAiBranchError(null)
     setAiBranchResult(null)
     setActiveDialog("ai-branch")
@@ -1117,6 +1136,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         nodeTitle: editor.selectedNode.title,
       })
       setAiBranchResult(result)
+      trackAiUsage("aiBranch")
     } catch (error) {
       setAiBranchError(
         error instanceof Error ? error.message : "AI generation failed. Try again."
@@ -1147,6 +1167,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const handleOpenAiSummary = (scope: "map" | "branch") => {
+    if (isAtLimit("aiSummaryPerMonth", aiUsage.aiSummary)) {
+      publishToast("AI summary limit reached. Upgrade to Pro for unlimited.", "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     setAiSummaryScope(scope)
     setAiSummaryResult(null)
     setAiSummaryError(null)
@@ -1178,6 +1203,7 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         scope,
       })
       setAiSummaryResult(result)
+      trackAiUsage("aiSummary")
     } catch (err) {
       setAiSummaryError(
         err instanceof Error ? err.message : "AI summary failed. Try again."
@@ -1205,6 +1231,12 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const handleSaveCurrentView = () => {
+    if (isAtLimit("savedViews", savedViews.length)) {
+      const limit = savedViews.length
+      publishToast(`Saved views limit reached (${limit}). Upgrade to Pro for unlimited.`, "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     const name = savedViewNameInput.trim() || `View ${savedViews.length + 1}`
     const viewport = canvasViewportRef.current?.getViewport()
     if (!viewport) {
@@ -1242,6 +1274,12 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
   }
 
   const handleCreateSnapshot = () => {
+    if (isAtLimit("snapshotsPerMap", snapshots.length)) {
+      const limit = snapshots.length
+      publishToast(`Snapshot limit reached (${limit}). Upgrade to Pro for unlimited.`, "warning")
+      setPlanUpgradeOpen(true)
+      return
+    }
     const name =
       snapshotNameInput.trim() ||
       `Snapshot ${new Date().toLocaleString(undefined, {
@@ -3856,6 +3894,20 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         title="Saved views"
       >
         <div className="space-y-4">
+          {isAtLimit("savedViews", savedViews.length) ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Saved views limit reached. Upgrade to Pro for unlimited.
+              </p>
+              <button
+                className="shrink-0 text-xs font-semibold text-primary underline underline-offset-2"
+                onClick={() => { closeDialog(); setPlanUpgradeOpen(true) }}
+                type="button"
+              >
+                Upgrade
+              </button>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <Input
               className="flex-1"
@@ -3926,6 +3978,20 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
         title="Version snapshots"
       >
         <div className="space-y-4">
+          {isAtLimit("snapshotsPerMap", snapshots.length) ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Snapshot limit reached. Upgrade to Pro for unlimited.
+              </p>
+              <button
+                className="shrink-0 text-xs font-semibold text-primary underline underline-offset-2"
+                onClick={() => { closeDialog(); setPlanUpgradeOpen(true) }}
+                type="button"
+              >
+                Upgrade
+              </button>
+            </div>
+          ) : null}
           {editor.canEdit ? (
             <div className="flex gap-2">
               <Input
@@ -4124,6 +4190,11 @@ export function MapWorkspaceShell({ currentUser, map }: MapWorkspaceShellProps) 
           </div>
         </div>
       ) : null}
+
+      <UpgradeModal
+        onClose={() => setPlanUpgradeOpen(false)}
+        open={planUpgradeOpen}
+      />
     </section>
   )
 }
