@@ -2,6 +2,8 @@
 
 Branchly is a collaborative visual thinking workspace for turning scattered ideas into shared maps. The active app lives in `client-v3/` and combines a map editor, live collaboration, comments and mentions, AI-assisted branching and summarization, plus a presentation-ready demo pricing flow.
 
+This project was done under the supervision of Professor Roi Poranne from Haifa University as part of a course I took as a student in Haifa University
+
 
 ## Screenshots
 
